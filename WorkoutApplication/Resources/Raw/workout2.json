@@ -1,0 +1,96 @@
+{
+  "Id": "workout2",
+  "Title": "Day 2",
+  "LastPerformed": "",
+  "Exercises": [
+    {
+      "Name": "Assisted Pullup (Normal Grip)",
+      "MuscleGroup": "Back",
+      "Sets": [
+        {
+          "SetNumber": 1,
+          "Weight": 0,
+          "Reps": 0,
+          "PreviousWeight": 0,
+          "PreviousReps": 0,
+          "Completed": false
+        },
+        {
+          "SetNumber": 2,
+          "Weight": 0,
+          "Reps": 0,
+          "PreviousWeight": 0,
+          "PreviousReps": 0,
+          "Completed": false
+        }
+      ]
+    },
+    {
+      "Name": "Pulldown (Narrow Grip)",
+      "MuscleGroup": "Back",
+      "Sets": [
+        {
+          "SetNumber": 1,
+          "Weight": 0,
+          "Reps": 0,
+          "PreviousWeight": 0,
+          "PreviousReps": 0,
+          "Completed": false
+        },
+        {
+          "SetNumber": 2,
+          "Weight": 0,
+          "Reps": 0,
+          "PreviousWeight": 0,
+          "PreviousReps": 0,
+          "Completed": false
+        }
+      ]
+    },
+    {
+      "Name": "Seated Cable Row",
+      "MuscleGroup": "Back",
+      "Sets": [
+        {
+          "SetNumber": 1,
+          "Weight": 0,
+          "Reps": 0,
+          "PreviousWeight": 0,
+          "PreviousReps": 0,
+          "Completed": false
+        },
+        {
+          "SetNumber": 2,
+          "Weight": 0,
+          "Reps": 0,
+          "PreviousWeight": 0,
+          "PreviousReps": 0,
+          "Completed": false
+        }
+      ]
+    },
+    {
+      "Name": "Smith Machine Press (Incline, Wide Grip)",
+      "MuscleGroup": "Chest",
+      "Sets": [
+        {
+          "SetNumber": 1,
+          "Weight": 0,
+          "Reps": 0,
+          "PreviousWeight": 0,
+          "PreviousReps": 0,
+          "Completed": false
+        },
+        {
+          "SetNumber": 2,
+          "Weight": 0,
+          "Reps": 0,
+          "PreviousWeight": 0,
+          "PreviousReps": 0,
+          "Completed": false
+        }
+      ]
+    }
+  ],
+  "CompletedExercises": []
+}

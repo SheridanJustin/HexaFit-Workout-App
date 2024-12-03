@@ -1,0 +1,30 @@
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="WorkoutApplication.HistoryPage"
+             Title="Workout History"
+              BackgroundColor="#212121">
+
+
+    <StackLayout Padding="10">
+
+       
+
+        <!-- ScrollView inside StackLayout for better scrolling behavior -->
+        <ScrollView VerticalOptions="FillAndExpand" HorizontalOptions="FillAndExpand">
+            <StackLayout x:Name="HistoryContent">
+                <Frame
+                BorderColor="#8C8C8C"
+                BackgroundColor="#333333"
+                CornerRadius="10"
+                Padding="10"
+                Margin="0,0,0,0"
+                HasShadow="True">
+                    <Label Text="Previous Workouts" FontSize="Large" FontAttributes="Bold" HorizontalOptions="Center" TextColor="#e74040"/>
+                </Frame>
+
+
+                <!-- Workout data will be dynamically added here -->
+            </StackLayout>
+        </ScrollView>
+    </StackLayout>
+</ContentPage>

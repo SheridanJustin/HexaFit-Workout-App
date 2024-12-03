@@ -1,0 +1,140 @@
+{
+  "Id": "workout1",
+  "Title": "Day 1",
+  "LastPerformed": "",
+  "Exercises": [
+    {
+      "Name": "Cable Overhead Triceps Extension",
+      "MuscleGroup": "Triceps",
+      "Sets": [
+        {
+          "SetNumber": 1,
+          "Weight": 0,
+          "Reps": 0,
+          "PreviousWeight": 0,
+          "PreviousReps": 0,
+          "Completed": false
+        },
+        {
+          "SetNumber": 2,
+          "Weight": 0,
+          "Reps": 0,
+          "PreviousWeight": 20,
+          "PreviousReps": 13,
+          "Completed": false
+        }
+      ]
+    },
+    {
+      "Name": "Cable Triceps Pushdown (Bar)",
+      "MuscleGroup": "Triceps",
+      "Sets": [
+        {
+          "SetNumber": 1,
+          "Weight": 0,
+          "Reps": 0,
+          "PreviousWeight": 0,
+          "PreviousReps": 0,
+          "Completed": false
+        },
+        {
+          "SetNumber": 2,
+          "Weight": 0,
+          "Reps": 0,
+          "PreviousWeight": 0,
+          "PreviousReps": 0,
+          "Completed": false
+        }
+      ]
+    },
+    {
+      "Name": "Single Arm Triceps Extension",
+      "MuscleGroup": "Triceps",
+      "Sets": [
+        {
+          "SetNumber": 1,
+          "Weight": 0,
+          "Reps": 0,
+          "PreviousWeight": 0,
+          "PreviousReps": 0,
+          "Completed": false
+        },
+        {
+          "SetNumber": 2,
+          "Weight": 0,
+          "Reps": 0,
+          "PreviousWeight": 0,
+          "PreviousReps": 0,
+          "Completed": false
+        }
+      ]
+    },
+    {
+      "Name": "Barbell Curl (Normal Grip)",
+      "MuscleGroup": "Biceps",
+      "Sets": [
+        {
+          "SetNumber": 1,
+          "Weight": 0,
+          "Reps": 0,
+          "PreviousWeight": 0,
+          "PreviousReps": 0,
+          "Completed": false
+        },
+        {
+          "SetNumber": 2,
+          "Weight": 0,
+          "Reps": 0,
+          "PreviousWeight": 0,
+          "PreviousReps": 0,
+          "Completed": false
+        }
+      ]
+    },
+    {
+      "Name": "Dumbbell Preacher Curl (Single-Arm)",
+      "MuscleGroup": "Biceps",
+      "Sets": [
+        {
+          "SetNumber": 1,
+          "Weight": 0,
+          "Reps": 0,
+          "PreviousWeight": 0,
+          "PreviousReps": 0,
+          "Completed": false
+        },
+        {
+          "SetNumber": 2,
+          "Weight": 0,
+          "Reps": 0,
+          "PreviousWeight": 0,
+          "PreviousReps": 0,
+          "Completed": false
+        }
+      ]
+    },
+    {
+      "Name": "Leg Press",
+      "MuscleGroup": "Quads",
+      "Sets": [
+        {
+          "SetNumber": 1,
+          "Weight": 0,
+          "Reps": 0,
+          "PreviousWeight": 0,
+          "PreviousReps": 0,
+          "Completed": false
+        },
+        {
+          "SetNumber": 2,
+          "Weight": 0,
+          "Reps": 0,
+          "PreviousWeight": 0,
+          "PreviousReps": 0,
+          "Completed": false
+        }
+      ]
+    }
+  ],
+  "CompletedExercises": []
+}
