@@ -1,0 +1,21 @@
+﻿<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="FitnessApp.MainPage"
+             Padding="0,0,0,0"
+             BackgroundColor="#212121">
+
+    <StackLayout VerticalOptions="Start" HorizontalOptions="Center">
+
+     
+
+        <!-- Scrollable content for the first workout plan -->
+        <ScrollView VerticalOptions="FillAndExpand" HorizontalOptions="FillAndExpand" HorizontalScrollBarVisibility="Never" 
+            VerticalScrollBarVisibility="Never">
+            <StackLayout x:Name="PlanContent" Padding="10">
+                <Label Text="Workout Screen" HorizontalOptions="FillAndExpand"  TextColor="White" HorizontalTextAlignment="Center"  />
+                <!-- The content will be dynamically added here -->
+            </StackLayout>
+        </ScrollView>
+
+    </StackLayout>
+</ContentPage>

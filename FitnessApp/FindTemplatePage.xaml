@@ -1,0 +1,73 @@
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="FitnessApp.FindTemplatePage"
+             Title="Workout Templates"
+             BackgroundColor="#212121"
+             >
+
+    <!-- Main grid to contain both the content and the loading overlay -->
+    <Grid x:Name="MainGrid">
+
+        <!-- ScrollView with StackLayout for the main content -->
+        <ScrollView VerticalOptions="FillAndExpand" HorizontalOptions="FillAndExpand">
+            <StackLayout Padding="10">
+                <!-- Static Content -->
+                <Label Text="Workout" FontSize="50" TextColor="White" Padding="0,50,0,50"/>
+
+                <!-- New Grid for "Custom Workouts" label and "Add Custom Workout" button -->
+                <Grid ColumnDefinitions="*,Auto"
+                      HorizontalOptions="FillAndExpand"
+                      Margin="0,10,0,10">
+                    <Label Text="Custom Workouts" 
+                           FontSize="Small" 
+                           TextColor="LightGray" 
+                           FontAttributes="Bold"
+                           VerticalOptions="Center" 
+                           HorizontalOptions="Start" />
+
+                    <Button x:Name="AddWorkoutButton"
+                            Text="Add"
+                            BackgroundColor="#4CAF50"
+                            TextColor="White"
+                            FontAttributes="Bold"
+                            HeightRequest="30"
+                            WidthRequest="50"
+                            IsVisible="False"
+                            FontSize="10"
+                            Clicked="OnAddWorkoutButtonClicked"
+                            HorizontalOptions="End"
+                            VerticalOptions="Center"
+                            Margin="10,0,0,0" />
+                </Grid>
+
+                <!-- Dynamic Content -->
+                <StackLayout x:Name="CustomTemplates">
+                    <!-- Workout templates will be dynamically added here -->
+                </StackLayout>
+
+                <!-- New Label for "Sample Workouts" -->
+                <Label Text="Sample Workouts" 
+                       FontSize="Small" 
+                       TextColor="LightGray" 
+                       FontAttributes="Bold" 
+                       HorizontalOptions="Start"
+                       Margin="0,10,0,10" />
+
+                <!-- Dynamic Content -->
+                <StackLayout x:Name="SampleTemplates">
+                    <!-- Workout templates will be dynamically added here -->
+                </StackLayout>
+            </StackLayout>
+        </ScrollView>
+
+        <!-- Overlay grid for loading indicator -->
+        <Grid x:Name="LoadingOverlay" BackgroundColor="#11111166" IsVisible="False">
+            <ActivityIndicator x:Name="LoadingIndicator"
+                               IsRunning="False"
+                               Color="White"
+                               VerticalOptions="Center"
+                               HorizontalOptions="Center" />
+        </Grid>
+
+    </Grid>
+</ContentPage>

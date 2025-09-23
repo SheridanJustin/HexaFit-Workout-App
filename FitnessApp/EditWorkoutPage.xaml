@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="FitnessApp.EditWorkoutPage"
+             Title="Edit Workout"
+             BackgroundColor="#212121">
+
+    <!-- Main Grid -->
+    <Grid VerticalOptions="FillAndExpand" HorizontalOptions="FillAndExpand" Padding="10">
+        <!-- Define the rows for the grid -->
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*"/>
+            <!-- Content area row -->
+        </Grid.RowDefinitions>
+
+        <!-- ScrollView for content area -->
+        <ScrollView Grid.Row="0" Grid.Column="0" HorizontalScrollBarVisibility="Never" 
+            VerticalScrollBarVisibility="Never">
+            <VerticalStackLayout>
+                <!-- Title in a Frame -->
+                <Frame
+                    BorderColor="#FF0000"
+                    BackgroundColor="#333333"
+                    CornerRadius="10"
+                    Padding="10"
+                    Margin="0,15,0,10"
+                    HorizontalOptions="FillAndExpand"
+                    HasShadow="True">
+                    <Label 
+                        x:Name="TitleLabel"
+                        Text="Edit Workout"
+                        VerticalOptions="Center" 
+                        HorizontalOptions="Center" 
+                        TextColor="White"
+                        FontSize="Large"/>
+                </Frame>
+
+                <!-- Layout for dynamically added exercises -->
+                <StackLayout x:Name="CustomExerciseLayout"
+                             Spacing="10"
+                             Padding="5"/>
+
+                <!-- Add Exercise button below the title -->
+                <Button Text="ADD EXERCISE" 
+                        TextColor="#FF0000"
+                        HorizontalOptions="Center"
+                        VerticalOptions="Center"
+                        FontSize="Medium"
+                        BackgroundColor="#212121"
+                        Margin="0,0,0,100"
+                        Clicked="OnAddExerciseClicked"/>
+            </VerticalStackLayout>
+        </ScrollView>
+
+        <!-- Overlapping Grid for Save and Cancel buttons -->
+        <StackLayout Grid.Row="1" Grid.Column="0" Orientation="Horizontal" Spacing="10" Padding="15,0,15,15">
+            <!-- Save Button -->
+            <Button
+                Text="Save"
+                BackgroundColor="#4CAF50"
+                TextColor="White"
+                FontAttributes="Bold"
+                HorizontalOptions="FillAndExpand"
+                VerticalOptions="End"
+                HeightRequest="40"
+                CornerRadius="10"
+                Clicked="OnSaveButtonTapped"/>
+
+            <!-- Cancel Button -->
+            <Button
+                Text="Cancel"
+                BackgroundColor="#FF0000"
+                TextColor="White"
+                FontAttributes="Bold"
+                HorizontalOptions="FillAndExpand"
+                VerticalOptions="End"
+                HeightRequest="40"
+                CornerRadius="10"
+                Clicked="OnCloseButtonTapped"/>
+        </StackLayout>
+    </Grid>
+</ContentPage>
