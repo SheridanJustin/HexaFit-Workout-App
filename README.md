@@ -27,28 +27,28 @@ UI design and completly free. I've personally been using this app for over 3 yea
 
 ## Features
 
--  **Workout Templates**
+**Workout Templates**
   - Choose from saved workouts
   - Create your own routines
 
--  **Track Your Sets**
+**Track Your Sets**
   - Log reps, weight, and sets during workouts
   - Clean, distraction-free interface
 
-- **AI Machine Identification**
+**AI Machine Identification**
   - Upload a picture of a gym machine
   - Get a YouTube video showing how to use it
   
--  **Progress Tracking**
+**Progress Tracking**
   - Automatically remembers your last workout reps & sets
   - Helps you progressively overload
   - Built in workout counter
 
--  **Local Storage**
+**Local Storage**
   - Everything is saved on your device
   - No login or internet required
-
--  **Smart Cancel**
+  
+**Smart Cancel**
   - Prevents you from accidentally losing a workout
 
 ---
