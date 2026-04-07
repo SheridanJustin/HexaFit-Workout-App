@@ -19,8 +19,8 @@
 
 ## What is HexaFit?
 
-Hexafit is a personal project of mine I built during summer time at sheridan college, it's meant to be a realiable free workout app. While the play/app store is litered with thousands of gym apps,
-they all have a caveat. Weather it being a limited amount of workout templates (looking at you myfitnesspal), massive amount of bloat, or being paid. Hexafit was designed to be bloat free, simple
+Hexafit is a personal project of mine I built during summer at sheridan college, it's meant to be a realiable free workout app. While the play/app store is litered with thousands of gym apps,
+they all have a caveat. Whether it being a limited amount of workout templates (looking at you myfitnesspal), massive amount of bloat, ads or a subscription model. Hexafit was designed to be bloat free, simple
 UI design and completly free. I've personally been using this app for over 3 years after building it and never needed to switch.
 
 ---
