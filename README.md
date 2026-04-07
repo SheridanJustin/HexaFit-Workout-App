@@ -2,10 +2,15 @@
 
 ## Preview
 
-![Workout App UI](https://source.unsplash.com/featured/?fitness,app)
-![Workout Tracker](https://source.unsplash.com/featured/?gym,tracking)
-![Workout Planner](https://source.unsplash.com/featured/?mobile,fitness)
-![Progress Screen](https://source.unsplash.com/featured/?workout,progress)
+<p align="center">
+  <img src="FitnessApp/screenshots/hf1.png" width="45%"/>
+   <img src="FitnessApp/screenshots/hf2.png" width="45%"/>
+</p>
+
+<p align="center">
+   <img src="FitnessApp/screenshots/hf3.png" width="45%"/>
+   <img src="FitnessApp/screenshots/hf4.png" width="45%"/>
+</p>
 
 ---
 
