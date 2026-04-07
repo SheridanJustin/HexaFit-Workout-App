@@ -5,15 +5,15 @@
 <p align="center">
   <img src="FitnessApp/screenshots/hexafit1.png" width="45%"/>
   <img src="FitnessApp/screenshots/hexafit2.png" width="45%"/>
-  <img src="FitnessApp/screenshots/hexafit3.png" width="45%"/>
-  <img src="FitnessApp/screenshots/hexafit4.png" width="45%"/>
+  <img src="FitnessApp/screenshots/hexafit3.jpg" width="45%"/>
+  <img src="FitnessApp/screenshots/hexafit4.jpg" width="45%"/>
 </p>
 
 <p align="center">
-   <img src="FitnessApp/screenshots/hexafit5.png" width="45%"/>
-   <img src="FitnessApp/screenshots/hexafit6.png" width="45%"/>
-   <img src="FitnessApp/screenshots/hexafit7.png" width="45%"/>
-   <img src="FitnessApp/screenshots/hexafit8.png" width="45%"/>
+   <img src="FitnessApp/screenshots/hexafit5.jpg" width="45%"/>
+   <img src="FitnessApp/screenshots/hexafit6.jpg" width="45%"/>
+   <img src="FitnessApp/screenshots/hexafit7.jpg" width="45%"/>
+   <img src="FitnessApp/screenshots/hexafit8.jpg" width="45%"/>
 </p>
 
 ---
