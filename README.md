@@ -3,13 +3,17 @@
 ## Preview
 
 <p align="center">
-  <img src="FitnessApp/screenshots/hf1.png" width="45%"/>
-   <img src="FitnessApp/screenshots/hf2.png" width="45%"/>
+  <img src="FitnessApp/screenshots/hexafit1.png" width="45%"/>
+  <img src="FitnessApp/screenshots/hexafit2.png" width="45%"/>
+  <img src="FitnessApp/screenshots/hexafit3.png" width="45%"/>
+  <img src="FitnessApp/screenshots/hexafit4.png" width="45%"/>
 </p>
 
 <p align="center">
-   <img src="FitnessApp/screenshots/hf3.png" width="45%"/>
-   <img src="FitnessApp/screenshots/hf4.png" width="45%"/>
+   <img src="FitnessApp/screenshots/hexafit5.png" width="45%"/>
+   <img src="FitnessApp/screenshots/hexafit6.png" width="45%"/>
+   <img src="FitnessApp/screenshots/hexafit7.png" width="45%"/>
+   <img src="FitnessApp/screenshots/hexafit8.png" width="45%"/>
 </p>
 
 ---
@@ -32,6 +36,10 @@ UI design and complelty free. I've personally been using this app for over 3 yea
   - Log reps, weight, and sets during workouts
   - Clean, distraction-free interface
 
+- **AI Machine Identification**
+  - Upload a picture of a gym machine
+  - Get a YouTube video showing how to use it
+  
 -  **Progress Tracking**
   - Automatically remembers your last workout reps & sets
   - Helps you progressively overload
