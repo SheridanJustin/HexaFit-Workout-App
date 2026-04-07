@@ -4,8 +4,8 @@
 
 <p align="center">
   <img src="FitnessApp/screenshots/hexafit2.png" width="24%"/>
+  <img src="FitnessApp/screenshots/hexafit8.jpg" width="24%"/>
   <img src="FitnessApp/screenshots/hexafit9.png" width="24%"/>
-  <img src="FitnessApp/screenshots/hexafit4.jpg" width="24%"/>
   <img src="FitnessApp/screenshots/hexafit1.png" width="24%"/>
 </p>
 
