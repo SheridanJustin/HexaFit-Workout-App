@@ -142,7 +142,7 @@ namespace FitnessApp
 
             _cards.Add(card);
             _layout.Children.Add(card.Frame);
-            _reorder.Attach(card.Frame, handle);
+            _reorder.Attach(card.Frame, handle, () => card.NameLabel.Text);
         }
 
         private void SetCompact(bool compact)

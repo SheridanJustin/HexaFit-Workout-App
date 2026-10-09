@@ -487,7 +487,7 @@ namespace FitnessApp
 
             exerciseFrame.Content = exerciseLayout;
             _cards[exerciseFrame] = card;
-            _reorder.Attach(exerciseFrame, handle);
+            _reorder.Attach(exerciseFrame, handle, () => card.NameLabel.Text);
             return exerciseFrame;
         }
 
