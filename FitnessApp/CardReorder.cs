@@ -6,6 +6,10 @@ namespace FitnessApp
     // the card you picked up fades out, and a gray dashed slot shows exactly where it will land
     // (above or below the card under your finger). Let go to drop it there.
     // While dragging, the page can collapse its cards (setCompact) so every exercise fits on screen.
+    //
+    // Every layout change is deferred with Dispatcher.Dispatch: Android walks the views taking part
+    // in the drag while it delivers drag events, and adding/removing/hiding a view during that walk
+    // throws ConcurrentModificationException and crashes the app.
     public class CardReorder
     {
         private readonly Layout _container;
@@ -53,7 +57,7 @@ namespace FitnessApp
                     e.AcceptedOperation = DataPackageOperation.Copy;
                 }
             };
-            placeholderDrop.Drop += (s, e) => DropAtPlaceholder();
+            placeholderDrop.Drop += (s, e) => Defer(DropAtPlaceholder);
             _placeholder.GestureRecognizers.Add(placeholderDrop);
         }
 
@@ -66,10 +70,13 @@ namespace FitnessApp
                 _dragged = card;
                 e.Data.Text = "exercise";
                 _placeholderLabel.Text = $"Move {title()} here";
-                card.Opacity = 0.35; // The "lifted" card stays in place, faded
-                _setCompact?.Invoke(true);
+                Defer(() =>
+                {
+                    card.Opacity = 0.35; // The "lifted" card stays in place, faded
+                    _setCompact?.Invoke(true);
+                });
             };
-            drag.DropCompleted += (s, e) => EndDrag();
+            drag.DropCompleted += (s, e) => Defer(EndDrag);
             handle.GestureRecognizers.Add(drag);
 
             var drop = new DropGestureRecognizer { AllowDrop = true };
@@ -84,16 +91,26 @@ namespace FitnessApp
 
                 var position = e.GetPosition(card);
                 bool below = position.HasValue && position.Value.Y > card.Height / 2;
-                ShowPlaceholder(card, below);
+                Defer(() => ShowPlaceholder(card, below));
             };
-            drop.Drop += (s, e) => DropAtPlaceholder();
+            drop.Drop += (s, e) => Defer(DropAtPlaceholder);
             card.GestureRecognizers.Add(drop);
+        }
+
+        private void Defer(Action action)
+        {
+            _container.Dispatcher.Dispatch(action);
         }
 
         // Puts the gray slot above or below the target card. Hides it when dropping there
         // wouldn't move anything (on the card itself or right next to it).
         private void ShowPlaceholder(Frame target, bool below)
         {
+            if (_dragged == null)
+            {
+                return; // The drag ended before this queued update ran
+            }
+
             var cards = _container.Children.Where(c => c != _placeholder).ToList();
             int targetIndex = cards.IndexOf(target);
             int draggedIndex = cards.IndexOf(_dragged);
