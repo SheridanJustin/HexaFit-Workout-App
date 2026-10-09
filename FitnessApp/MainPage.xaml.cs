@@ -183,48 +183,134 @@ namespace FitnessApp
             var image = new Image
             {
                 Source = "machoman2.png",
-                HeightRequest = 200,
-                WidthRequest = 200,
+                HeightRequest = 180,
+                WidthRequest = 180,
                 HorizontalOptions = LayoutOptions.Center,
-                VerticalOptions = LayoutOptions.Center,
-                Margin = new Thickness(0, 50, 0, 80)
+                Margin = new Thickness(0, 40, 0, 24)
+            };
+
+            var titleLabel = new Label
+            {
+                Text = "Ready to train?",
+                TextColor = Theme.TextPrimary,
+                FontSize = 26,
+                FontAttributes = FontAttributes.Bold,
+                HorizontalOptions = LayoutOptions.Center
             };
 
             var messageLabel = new Label
             {
-                Text = "Select a workout from the templates page.",
-                TextColor = Theme.TextPrimary,
+                Text = "Pick a template to start your workout.",
+                TextColor = Theme.TextMuted,
+                FontSize = 15,
                 HorizontalOptions = LayoutOptions.Center,
-                VerticalOptions = LayoutOptions.Start,
-                FontSize = 16,
-                Margin = new Thickness(0, -20, 0, 30)
+                Margin = new Thickness(0, 4, 0, 28)
             };
 
             var selectButton = new Button
             {
-                Text = "Go to Templates",
+                Text = "Start a Workout",
                 BackgroundColor = Theme.Accent,
                 TextColor = Theme.TextPrimary,
                 FontAttributes = FontAttributes.Bold,
-                CornerRadius = 10,
-                HeightRequest = 50,
-                Padding = new Thickness(24, 0),
-                Margin = new Thickness(0, 10, 0, 0),
-                HorizontalOptions = LayoutOptions.Center,
-                VerticalOptions = LayoutOptions.Start,
+                FontSize = 17,
+                CornerRadius = 14,
+                HeightRequest = 56,
+                Margin = new Thickness(8, 0)
             };
 
             selectButton.Clicked += async (s, e) =>
             {
-                await selectButton.ScaleTo(0.9, 100, Easing.CubicIn);
+                await selectButton.ScaleTo(0.95, 100, Easing.CubicIn);
                 await selectButton.ScaleTo(1, 100, Easing.CubicOut);
 
                 await Shell.Current.GoToAsync("//Templates");
             };
 
             PlanContent.Children.Add(image);
+            PlanContent.Children.Add(titleLabel);
             PlanContent.Children.Add(messageLabel);
             PlanContent.Children.Add(selectButton);
+            PlanContent.Children.Add(CreateScanCard());
+        }
+
+        // Card linking to the machine scanner: icon, title, one-line hint and a chevron
+        private View CreateScanCard()
+        {
+            var iconCircle = new Border
+            {
+                BackgroundColor = Color.FromArgb("#1E3A24"),
+                StrokeThickness = 0,
+                StrokeShape = new Microsoft.Maui.Controls.Shapes.RoundRectangle { CornerRadius = 24 },
+                WidthRequest = 48,
+                HeightRequest = 48,
+                VerticalOptions = LayoutOptions.Center,
+                Content = new Image
+                {
+                    Source = "camera.png",
+                    WidthRequest = 24,
+                    HeightRequest = 24,
+                    Behaviors = { new CommunityToolkit.Maui.Behaviors.IconTintColorBehavior { TintColor = Theme.Accent } }
+                }
+            };
+
+            var text = new VerticalStackLayout
+            {
+                Spacing = 2,
+                VerticalOptions = LayoutOptions.Center,
+                Children =
+                {
+                    new Label { Text = "Scan a Machine", TextColor = Theme.TextPrimary, FontSize = 17, FontAttributes = FontAttributes.Bold },
+                    new Label { Text = "Not sure how to use it? Snap a photo.", TextColor = Theme.TextMuted, FontSize = 14 }
+                }
+            };
+
+            var chevron = new Label
+            {
+                Text = "›",
+                TextColor = Theme.TextMuted,
+                FontSize = 30,
+                VerticalOptions = LayoutOptions.Center
+            };
+
+            var grid = new Grid
+            {
+                ColumnDefinitions =
+                {
+                    new ColumnDefinition { Width = GridLength.Auto },
+                    new ColumnDefinition { Width = GridLength.Star },
+                    new ColumnDefinition { Width = GridLength.Auto }
+                },
+                ColumnSpacing = 14
+            };
+            grid.Children.Add(iconCircle);
+            Grid.SetColumn(iconCircle, 0);
+            grid.Children.Add(text);
+            Grid.SetColumn(text, 1);
+            grid.Children.Add(chevron);
+            Grid.SetColumn(chevron, 2);
+
+            var card = new Border
+            {
+                BackgroundColor = Theme.CardBackground,
+                Stroke = Theme.Border,
+                StrokeThickness = 1,
+                StrokeShape = new Microsoft.Maui.Controls.Shapes.RoundRectangle { CornerRadius = 14 },
+                Padding = new Thickness(16, 14),
+                Margin = new Thickness(8, 14, 8, 0),
+                Content = grid
+            };
+
+            var tap = new TapGestureRecognizer();
+            tap.Tapped += async (s, e) =>
+            {
+                await card.ScaleTo(0.97, 100, Easing.CubicIn);
+                await card.ScaleTo(1, 100, Easing.CubicOut);
+                await Navigation.PushAsync(new ScanPage());
+            };
+            card.GestureRecognizers.Add(tap);
+
+            return card;
         }
 
         public void DisplayWorkoutPlan(WorkoutSession session)

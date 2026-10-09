@@ -1,4 +1,4 @@
-﻿using System.ComponentModel;
+using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
 using System.Windows.Input;
@@ -6,22 +6,26 @@ using FitnessApp.Services;
 
 namespace FitnessApp.ViewModels
 {
+    // Drives the Scan page: take or pick a photo, send it to the scanner server,
+    // then show what machine it is, how to use it, and a link to a how-to video.
     public class MainViewModel : INotifyPropertyChanged
     {
         private readonly FitnessApiService _apiService;
 
-        private string _inputText;
-        public string InputText
+        private ImageSource _previewImage;
+        public ImageSource PreviewImage
         {
-            get => _inputText;
-            set { _inputText = value; OnPropertyChanged(); }
+            get => _previewImage;
+            set { _previewImage = value; OnPropertyChanged(); OnPropertyChanged(nameof(HasImage)); OnPropertyChanged(nameof(IsIdle)); }
         }
+
+        public bool HasImage => PreviewImage != null;
 
         private string _prediction;
         public string Prediction
         {
             get => _prediction;
-            set { _prediction = value; OnPropertyChanged(); }
+            set { _prediction = value; OnPropertyChanged(); OnPropertyChanged(nameof(HasResult)); }
         }
 
         private string _instructions;
@@ -31,189 +35,153 @@ namespace FitnessApp.ViewModels
             set { _instructions = value; OnPropertyChanged(); }
         }
 
+        public bool HasResult => !string.IsNullOrWhiteSpace(Prediction);
+
+        private string _errorMessage;
+        public string ErrorMessage
+        {
+            get => _errorMessage;
+            set { _errorMessage = value; OnPropertyChanged(); OnPropertyChanged(nameof(HasError)); }
+        }
+
+        public bool HasError => !string.IsNullOrWhiteSpace(ErrorMessage);
+
         private bool _isLoading;
         public bool IsLoading
         {
             get => _isLoading;
-            set { _isLoading = value; OnPropertyChanged(); }
+            set { _isLoading = value; OnPropertyChanged(); OnPropertyChanged(nameof(IsNotLoading)); }
         }
 
-        private string _placeholderText;
-        public string PlaceholderText
-        {
-            get => _placeholderText;
-            set { _placeholderText = value; OnPropertyChanged(); }
-        }
+        public bool IsNotLoading => !IsLoading;
 
-        private bool _isPlaceholderVisible = true;
-        public bool IsPlaceholderVisible
-        {
-            get => _isPlaceholderVisible;
-            set { _isPlaceholderVisible = value; OnPropertyChanged(); }
-        }
+        // Nothing picked yet: show the "take a photo" prompt
+        public bool IsIdle => PreviewImage == null;
 
-        public ICommand PredictCommand { get; }
         public ICommand PickImageCommand { get; }
         public ICommand TakePhotoCommand { get; }
+        public ICommand WatchVideoCommand { get; }
 
         public MainViewModel()
         {
             _apiService = new FitnessApiService();
-            PlaceholderText = "Take or select a picture to identify gym equipment";
 
-            PredictCommand = new Command(async () => await PredictAsync());
             PickImageCommand = new Command(async () => await PickImageAsync());
             TakePhotoCommand = new Command(async () => await TakePhotoAsync());
-        }
-
-        private async Task PredictAsync()
-        {
-            if (string.IsNullOrWhiteSpace(InputText))
-            {
-                Prediction = "Please enter some text.";
-                Instructions = string.Empty;
-                return;
-            }
-
-            IsLoading = true;
-            Prediction = "Loading...";
-            Instructions = string.Empty;
-
-            try
-            {
-                var result = await _apiService.GetPredictionAsync(InputText);
-                Prediction = result; // Adjust based on actual API response
-                Instructions = string.Empty;
-            }
-            catch (HttpRequestException ex)
-            {
-                Prediction = "Error: Could not connect to the server.";
-                Instructions = $"Details: {ex.Message}";
-                Console.WriteLine($"HTTP Error in PredictAsync: {ex.Message}, Inner: {ex.InnerException?.Message}");
-            }
-            catch (Exception ex)
-            {
-                Prediction = "Error: Prediction failed.";
-                Instructions = $"Details: {ex.Message}";
-                Console.WriteLine($"General Error in PredictAsync: {ex.Message}");
-            }
-            finally
-            {
-                IsLoading = false;
-            }
+            WatchVideoCommand = new Command(async () => await WatchVideoAsync());
         }
 
         private async Task PickImageAsync()
         {
+            if (IsLoading)
+            {
+                return;
+            }
+
             try
             {
-                var result = await FilePicker.Default.PickAsync(new PickOptions
-                {
-                    PickerTitle = "Select an image"
-                });
-
-                if (result != null)
-                {
-                    IsLoading = true;
-                    Prediction = "Uploading image...";
-                    Instructions = string.Empty;
-
-                    var response = await _apiService.GetImagePredictionAsync(result.FullPath);
-                    if (!string.IsNullOrEmpty(response.Prediction))
-                    {
-                        Prediction = $"Equipment: {response.Prediction}";
-                        Instructions = string.IsNullOrEmpty(response.Instructions) ? "No instructions available." : $"Instructions: {response.Instructions}";
-                        IsPlaceholderVisible = false; // Hide placeholder on successful result
-                    }
-                    else
-                    {
-                        Prediction = "Unknown";
-                        Instructions = "No instructions available.";
-                        IsPlaceholderVisible = true; // Show placeholder if no valid result
-                    }
-                }
-                else
-                {
-                    IsPlaceholderVisible = true; // Show placeholder if no image selected
-                }
-            }
-            catch (HttpRequestException ex)
-            {
-                Prediction = "Error: Could not connect to the server.";
-                Instructions = $"Details: {ex.Message}";
-                IsPlaceholderVisible = true; // Show placeholder on error
-                Console.WriteLine($"HTTP Error in PickImageAsync: {ex.Message}, Inner: {ex.InnerException?.Message}");
+                var photo = await MediaPicker.Default.PickPhotoAsync(new MediaPickerOptions { Title = "Select a gym machine photo" });
+                await AnalyzeAsync(photo);
             }
             catch (Exception ex)
             {
-                Prediction = "Error: Prediction failed.";
-                Instructions = $"Details: {ex.Message}";
-                IsPlaceholderVisible = true; // Show placeholder on error
-                Console.WriteLine($"General Error in PickImageAsync: {ex.Message}");
-            }
-            finally
-            {
-                IsLoading = false;
+                ShowError("Couldn't open your photos.", ex);
             }
         }
 
         private async Task TakePhotoAsync()
         {
+            if (IsLoading)
+            {
+                return;
+            }
+
             if (!MediaPicker.Default.IsCaptureSupported)
             {
-                Prediction = "Camera not supported.";
-                Instructions = string.Empty;
-                IsPlaceholderVisible = true; // Show placeholder if camera not supported
+                ErrorMessage = "This device doesn't have a camera you can use. Try choosing a photo instead.";
                 return;
             }
 
             try
             {
                 var photo = await MediaPicker.Default.CapturePhotoAsync();
-                if (photo != null)
-                {
-                    IsLoading = true;
-                    Prediction = "Uploading photo...";
-                    Instructions = string.Empty;
-
-                    using var stream = await photo.OpenReadAsync();
-                    var response = await _apiService.GetImagePredictionAsync(stream, photo.FileName);
-                    if (!string.IsNullOrEmpty(response.Prediction))
-                    {
-                        Prediction = $"Equipment: {response.Prediction}";
-                        Instructions = string.IsNullOrEmpty(response.Instructions) ? "No instructions available." : $"Instructions: {response.Instructions}";
-                        IsPlaceholderVisible = false; // Hide placeholder on successful result
-                    }
-                    else
-                    {
-                        Prediction = "Unknown";
-                        Instructions = "No instructions available.";
-                        IsPlaceholderVisible = true; // Show placeholder if no valid result
-                    }
-                }
-                else
-                {
-                    IsPlaceholderVisible = true; // Show placeholder if no photo taken
-                }
+                await AnalyzeAsync(photo);
             }
-            catch (HttpRequestException ex)
+            catch (PermissionException ex)
             {
-                Prediction = "Error: Could not connect to the server.";
-                Instructions = $"Details: {ex.Message}";
-                IsPlaceholderVisible = true; // Show placeholder on error
-                Console.WriteLine($"HTTP Error in TakePhotoAsync: {ex.Message}, Inner: {ex.InnerException?.Message}");
+                ShowError("HexaFit needs camera permission to take a photo. You can allow it in your phone's Settings.", ex);
             }
             catch (Exception ex)
             {
-                Prediction = "Error: Prediction failed.";
-                Instructions = $"Details: {ex.Message}";
-                IsPlaceholderVisible = true; // Show placeholder on error
-                Console.WriteLine($"General Error in TakePhotoAsync: {ex.Message}");
+                ShowError("Couldn't open the camera.", ex);
+            }
+        }
+
+        private async Task AnalyzeAsync(FileResult photo)
+        {
+            if (photo == null)
+            {
+                return; // Cancelled
+            }
+
+            PreviewImage = ImageSource.FromFile(photo.FullPath);
+            Prediction = null;
+            Instructions = null;
+            ErrorMessage = null;
+            IsLoading = true;
+
+            try
+            {
+                using var stream = await photo.OpenReadAsync();
+                var response = await _apiService.GetImagePredictionAsync(stream, photo.FileName);
+
+                if (string.IsNullOrWhiteSpace(response?.Prediction))
+                {
+                    ErrorMessage = "We couldn't recognise that machine. Try a clearer photo with the whole machine in view.";
+                    return;
+                }
+
+                Prediction = response.Prediction.Trim();
+                Instructions = string.IsNullOrWhiteSpace(response.Instructions)
+                    ? "No instructions available yet. Watch the video below to see it in action."
+                    : response.Instructions.Trim();
+            }
+            catch (HttpRequestException ex)
+            {
+                ShowError("Couldn't reach the HexaFit scanner server. Make sure it's running and try again.", ex);
+            }
+            catch (TaskCanceledException ex)
+            {
+                ShowError("The scanner server took too long to answer. Try again.", ex);
+            }
+            catch (Exception ex)
+            {
+                ShowError("Something went wrong while scanning. Try again.", ex);
             }
             finally
             {
                 IsLoading = false;
             }
+        }
+
+        // Opens a YouTube search for a how-to video on the identified machine
+        private async Task WatchVideoAsync()
+        {
+            if (!HasResult)
+            {
+                return;
+            }
+
+            var query = Uri.EscapeDataString($"how to use {Prediction} gym machine");
+            await Launcher.Default.OpenAsync(new Uri($"https://www.youtube.com/results?search_query={query}"));
+        }
+
+        private void ShowError(string message, Exception ex)
+        {
+            Console.WriteLine($"Scan error: {ex}");
+            Prediction = null;
+            Instructions = null;
+            ErrorMessage = message;
         }
 
         public event PropertyChangedEventHandler PropertyChanged;
