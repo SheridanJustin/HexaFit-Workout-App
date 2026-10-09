@@ -3,16 +3,18 @@
 ## Preview
 
 <p align="center">
-  <img src="FitnessApp/screenshots/hexafit2.png" width="24%"/>
-  <img src="FitnessApp/screenshots/hexafit8.jpg" width="24%"/>
-  <img src="FitnessApp/screenshots/hexafit9.png" width="24%"/>
-  <img src="FitnessApp/screenshots/hexafit1.png" width="24%"/>
+  <img src="FitnessApp/screenshots/showcase/01-workout-home.png" width="24%"/>
+  <img src="FitnessApp/screenshots/showcase/07-active-workout.png" width="24%"/>
+  <img src="FitnessApp/screenshots/showcase/08-drag-to-reorder.png" width="24%"/>
+  <img src="FitnessApp/screenshots/showcase/04-history.png" width="24%"/>
 </p>
 
 <p align="center">
-   <img src="FitnessApp/screenshots/hexafit5.jpg" width="25%"/>
-   <img src="FitnessApp/screenshots/hexafit6.jpg" width="25%"/>
-   <img src="FitnessApp/screenshots/hexafit7.jpg" width="25%"/>
+   <img src="FitnessApp/screenshots/showcase/03-templates.png" width="19%"/>
+   <img src="FitnessApp/screenshots/showcase/09-template-editor.png" width="19%"/>
+   <img src="FitnessApp/screenshots/showcase/02-machine-scanner.png" width="19%"/>
+   <img src="FitnessApp/screenshots/showcase/05-exercises.png" width="19%"/>
+   <img src="FitnessApp/screenshots/showcase/06-settings.png" width="19%"/>
 </p>
 
 ---
@@ -30,19 +32,23 @@ UI design and completly free. I've personally been using this app for over 3 yea
 **Workout Templates**
   - Choose from saved workouts
   - Create your own routines
+  - Drag exercises to reorder them
 
 **Track Your Sets**
   - Log reps, weight, and sets during workouts
+  - Add, remove, rename and reorder exercises mid-workout
+  - Changes you make during a workout are saved back to the template
   - Clean, distraction-free interface
 
 **AI Machine Identification**
-  - Upload a picture of a gym machine
+  - Take or upload a picture of a gym machine
   - Get a YouTube video showing how to use it
   
 **Progress Tracking**
   - Automatically remembers your last workout reps & sets
   - Helps you progressively overload
   - Built in workout counter
+  - Full workout history that loads as you scroll
 
 **Local Storage**
   - Everything is saved on your device
