@@ -10,32 +10,27 @@ namespace FitnessApp
 {
     public partial class HistoryPage : ContentPage
     {
+        // How many workouts to read and draw at a time
+        private const int PageSize = 10;
+
+        // Start loading the next page when the user is this close to the bottom
+        private const double LoadMoreThreshold = 400;
+
+        private List<string> _files = new List<string>();
+        private int _nextIndex;
+        private bool _isLoading;
+        private int _generation; // Bumped on every reload so a stale page load is dropped
+
         public HistoryPage()
         {
             InitializeComponent();
-            LoadWorkoutHistory();
-        }
-
-        // Refresh button event handler 
-        private async void OnRefreshButtonClicked(object sender, EventArgs e)
-        {
-            var refreshButton = sender as Button;
-
-            // Scale down the button to 90% of its size
-            await refreshButton.ScaleTo(0.9, 100, Easing.CubicIn);
-
-            // Scale it back to its original size
-            await refreshButton.ScaleTo(1, 100, Easing.CubicOut);
-
-            // Reload the workout history
-            LoadWorkoutHistory();
         }
 
         protected override void OnAppearing()
         {
             base.OnAppearing();
 
-            // Automatically refresh the workout history every time the page appears
+            // Refresh the workout history every time the page appears
             LoadWorkoutHistory();
         }
 
@@ -46,93 +41,127 @@ namespace FitnessApp
             var messageLabel = new Label
             {
                 Text = "No workouts saved.",
-                TextColor = Color.FromArgb("#ffffff"),
+                TextColor = Theme.TextPrimary,
                 HorizontalOptions = LayoutOptions.Center,
-                VerticalOptions = LayoutOptions.CenterAndExpand,
                 FontSize = 18,
                 Margin = new Thickness(0, 20, 0, 10)
             };
 
             HistoryContent.Children.Add(messageLabel);
+            UpdateLoadMoreButton();
         }
 
-        private void LoadWorkoutHistory()
+        private async void LoadWorkoutHistory()
         {
-            // ✅ Use AppDataDirectory instead of hardcoded external storage
+            _generation++;
+            _isLoading = false;
+            HistoryContent.Children.Clear();
+            _nextIndex = 0;
+
             string directoryPath = FileSystem.AppDataDirectory;
 
-            if (!Directory.Exists(directoryPath))
+            // Only list the files here; their contents are read a page at a time.
+            // File names start with History_yyyy-MM-dd_HH-mm-ss, so sorting by name puts the newest first.
+            _files = Directory.Exists(directoryPath)
+                ? Directory.GetFiles(directoryPath, "History_*.json")
+                    .OrderByDescending(f => Path.GetFileName(f), StringComparer.Ordinal)
+                    .ToList()
+                : new List<string>();
+
+            if (_files.Count == 0)
             {
-                DisplayNoWorkoutMessage(); // Display a message if the directory does not exist
+                DisplayNoWorkoutMessage();
                 return;
             }
 
-            var files = Directory.GetFiles(directoryPath, "History_*.json");
+            await LoadNextPageAsync();
+        }
 
-            // Clear the existing history UI before reloading
-            HistoryContent.Children.Clear();
-
-            // Create the Frame
-            Frame frame = new Frame
+        private async Task LoadNextPageAsync()
+        {
+            if (_isLoading || _nextIndex >= _files.Count)
             {
-                BorderColor = Color.FromHex("#8C8C8C"),
-                BackgroundColor = Color.FromHex("#333333"),
-                CornerRadius = 10,
-                Padding = new Thickness(10),
-                Margin = new Thickness(0),
-                HasShadow = true
-            };
-
-            // Create the Label
-            Label label = new Label
-            {
-                Text = "Previous Workouts",
-                FontSize = Device.GetNamedSize(NamedSize.Large, typeof(Label)),
-                FontAttributes = FontAttributes.Bold,
-                HorizontalOptions = LayoutOptions.Center,
-                TextColor = Color.FromHex("#e74040")
-            };
-
-            // Add the Label to the Frame
-            frame.Content = label;
-
-            HistoryContent.Children.Add(frame);
-
-            if (files.Length == 0)
-            {
-                DisplayNoWorkoutMessage(); // Display a message if no workout history files are found
                 return;
             }
 
-            // Sort files by their last modified date in descending order
-            var sortedFiles = files.OrderByDescending(File.GetLastWriteTime).ToArray();
+            _isLoading = true;
+            int generation = _generation;
+            LoadingMoreIndicator.IsVisible = true;
+            LoadingMoreIndicator.IsRunning = true;
+            LoadMoreButton.IsVisible = false;
 
-            foreach (var file in sortedFiles)
+            var pageFiles = _files.Skip(_nextIndex).Take(PageSize).ToList();
+
+            // Read and parse off the UI thread so scrolling stays smooth
+            var sessions = await Task.Run(() =>
             {
-                try
+                var result = new List<(string File, WorkoutSession Session)>();
+                foreach (var file in pageFiles)
                 {
-                    string json = File.ReadAllText(file);
-                    var workoutSession = JsonConvert.DeserializeObject<WorkoutSession>(json);
-
-                    if (workoutSession != null)
+                    try
                     {
-                        DisplayHistoryPlan(file, workoutSession); // Pass the file path to DisplayHistoryPlan
+                        var session = JsonConvert.DeserializeObject<WorkoutSession>(File.ReadAllText(file));
+                        if (session != null)
+                        {
+                            result.Add((file, session));
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"Error reading file {file}: {ex.Message}");
                     }
                 }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"Error reading file {file}: {ex.Message}");
-                }
+                return result;
+            });
+
+            if (generation != _generation)
+            {
+                return; // The page was reloaded while this one was reading
+            }
+
+            foreach (var (file, session) in sessions)
+            {
+                HistoryContent.Children.Add(CreateHistoryCard(file, session));
+            }
+
+            _nextIndex += pageFiles.Count;
+            _isLoading = false;
+            LoadingMoreIndicator.IsRunning = false;
+            LoadingMoreIndicator.IsVisible = false;
+            UpdateLoadMoreButton();
+        }
+
+        private void UpdateLoadMoreButton()
+        {
+            LoadMoreButton.IsVisible = !_isLoading && _nextIndex < _files.Count;
+        }
+
+        private async void OnHistoryScrolled(object sender, ScrolledEventArgs e)
+        {
+            double distanceToBottom = HistoryScroll.ContentSize.Height - (e.ScrollY + HistoryScroll.Height);
+            if (distanceToBottom < LoadMoreThreshold)
+            {
+                await LoadNextPageAsync();
             }
         }
 
-        private void DisplayHistoryPlan(string filePath, WorkoutSession session)
+        private async void OnLoadMoreClicked(object sender, EventArgs e)
         {
+            await LoadNextPageAsync();
+        }
+
+        private View CreateHistoryCard(string filePath, WorkoutSession session)
+        {
+            var container = new StackLayout { Spacing = 0 };
+
             // Add the workout date and title at the top
-            var workoutTitleLayout = new StackLayout
+            var workoutTitleGrid = new Grid
             {
-                Orientation = StackOrientation.Horizontal,
-                HorizontalOptions = LayoutOptions.FillAndExpand
+                ColumnDefinitions =
+                {
+                    new ColumnDefinition { Width = GridLength.Star },
+                    new ColumnDefinition { Width = GridLength.Auto }
+                }
             };
 
             var workoutTitleLabel = new Label
@@ -140,20 +169,18 @@ namespace FitnessApp
                 Text = $"{session.Title} - {session.Date}",
                 FontAttributes = FontAttributes.Bold,
                 FontSize = 20,
-                TextColor = Color.FromArgb("#ffffff"),
+                TextColor = Theme.TextPrimary,
                 VerticalOptions = LayoutOptions.Center,
-                Margin = new Thickness(2, 0, 0, 0),
-                HorizontalOptions = LayoutOptions.StartAndExpand
+                Margin = new Thickness(2, 0, 0, 0)
             };
 
             var menuButton = new Button
             {
                 ImageSource = "menu.png",
                 BackgroundColor = Colors.Transparent,
-                WidthRequest = 62,
-                HeightRequest = 62,
-                VerticalOptions = LayoutOptions.Center,
-                HorizontalOptions = LayoutOptions.End
+                WidthRequest = 48,
+                HeightRequest = 48,
+                VerticalOptions = LayoutOptions.Center
             };
 
             menuButton.Clicked += async (s, e) =>
@@ -165,123 +192,93 @@ namespace FitnessApp
                     bool confirm = await DisplayAlert("Delete Confirmation", "Are you sure you want to delete this workout history?", "Yes", "No");
                     if (confirm)
                     {
-                        DeleteWorkoutHistory(filePath);
-                        LoadWorkoutHistory(); // Refresh the history after deletion
+                        DeleteWorkoutHistory(filePath, container);
                     }
                 }
             };
 
-            workoutTitleLayout.Children.Add(workoutTitleLabel);
-            workoutTitleLayout.Children.Add(menuButton);
+            workoutTitleGrid.Children.Add(workoutTitleLabel);
+            Grid.SetColumn(workoutTitleLabel, 0);
+            workoutTitleGrid.Children.Add(menuButton);
+            Grid.SetColumn(menuButton, 1);
 
-            HistoryContent.Children.Add(workoutTitleLayout);
+            container.Children.Add(workoutTitleGrid);
 
             // Create a frame to hold all exercises of the workout
             var workoutFrame = new Frame
             {
-                BorderColor = Color.FromRgb(140, 140, 140),
-                BackgroundColor = Color.FromArgb("#333333"),
+                BorderColor = Theme.Border,
+                BackgroundColor = Theme.CardBackground,
                 CornerRadius = 10,
                 Padding = new Thickness(10),
-                Margin = new Thickness(0, 0, 0, 0),
                 HasShadow = true
             };
 
-            var workoutLayout = new StackLayout
-            {
-                Spacing = 5,
-                Margin = new Thickness(0, 0, 0, 0)
-            };
+            var workoutLayout = new StackLayout { Spacing = 5 };
 
-            foreach (var exercise in session.CompletedExercises)
+            foreach (var exercise in session.CompletedExercises ?? new List<CompletedExercise>())
             {
-                var muscleGroupGrid = new Grid
+                var exerciseTag = new Frame
                 {
-                    ColumnDefinitions =
-                    {
-                        new ColumnDefinition { Width = GridLength.Star },
-                        new ColumnDefinition { Width = GridLength.Auto }
-                    }
-                };
-
-                var muscleGroupFrame = new Frame
-                {
-                    BorderColor = Color.FromArgb("#FF0000"),
-                    BackgroundColor = Color.FromArgb("#4A2A2A"),
+                    BorderColor = Theme.TagBorder,
+                    BackgroundColor = Theme.TagBackground,
                     CornerRadius = 5,
                     Padding = new Thickness(5),
                     HasShadow = false,
                     Margin = new Thickness(0, 5, 0, 7),
                     HorizontalOptions = LayoutOptions.Start,
-                    VerticalOptions = LayoutOptions.Center,
                     Content = new Label
                     {
-                        Text = exercise.Name.ToUpper(),
-                        TextColor = Color.FromArgb("#FFFFFF"),
-                        FontAttributes = FontAttributes.Bold,
-                        VerticalOptions = LayoutOptions.Center
+                        Text = (exercise.Name ?? string.Empty).ToUpper(),
+                        TextColor = Theme.TextPrimary,
+                        FontAttributes = FontAttributes.Bold
                     }
                 };
 
-                muscleGroupGrid.Children.Add(muscleGroupFrame);
-                Grid.SetColumn(muscleGroupFrame, 0);
+                workoutLayout.Children.Add(exerciseTag);
 
-                workoutLayout.Children.Add(muscleGroupGrid);
-
-                foreach (var set in exercise.Sets)
+                int setNumber = 1;
+                foreach (var set in exercise.Sets ?? new List<CompletedSet>())
                 {
-                    var setLayout = new StackLayout
+                    workoutLayout.Children.Add(new Label
                     {
-                        Orientation = StackOrientation.Horizontal,
-                        Spacing = 10,
-                        Margin = new Thickness(0, 5, 0, 5)
-                    };
-
-                    // Label for the weight
-                    var weightLabel = new Label
-                    {
-                        Text = $"{set.Weight} lbs  X",
+                        Text = $"Set {setNumber++}:  {set.Weight} lbs × {set.Reps} reps",
                         FontSize = 14,
-                        TextColor = Color.FromArgb("#ffffff"),
-                        VerticalOptions = LayoutOptions.Center
-                    };
-
-                    // Label for the reps
-                    var repsLabel = new Label
-                    {
-                        Text = $"{set.Reps} reps",
-                        FontSize = 14,
-                        TextColor = Color.FromArgb("#ffffff"),
-                        VerticalOptions = LayoutOptions.Center
-                    };
-
-                    setLayout.Children.Add(weightLabel);
-                    setLayout.Children.Add(repsLabel);
-
-                    workoutLayout.Children.Add(setLayout);
+                        TextColor = Theme.TextPrimary,
+                        Margin = new Thickness(2, 2, 0, 2)
+                    });
                 }
             }
 
             workoutFrame.Content = workoutLayout;
+            container.Children.Add(workoutFrame);
 
-            HistoryContent.Children.Add(workoutFrame);
+            return container;
         }
 
-        private void DeleteWorkoutHistory(string filePath)
+        private void DeleteWorkoutHistory(string filePath, View card)
         {
             if (File.Exists(filePath))
             {
                 File.Delete(filePath);
             }
 
-            // After deletion, check if there are any files left
-            string directoryPath = Path.GetDirectoryName(filePath);
-            var remainingFiles = Directory.GetFiles(directoryPath, "*.json");
+            // Remove just this card so the list keeps its scroll position
+            HistoryContent.Children.Remove(card);
 
-            if (remainingFiles.Length == 0)
+            int index = _files.IndexOf(filePath);
+            if (index >= 0)
             {
-                // If no files remain, clear the HistoryContent
-                HistoryContent.Children.Clear();
+                _files.RemoveAt(index);
+                if (index < _nextIndex)
+                {
+                    _nextIndex--;
+                }
+            }
+
+            if (_files.Count == 0)
+            {
+                DisplayNoWorkoutMessage();
             }
         }
     }

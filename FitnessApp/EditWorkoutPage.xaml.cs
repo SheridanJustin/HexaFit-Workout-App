@@ -147,16 +147,16 @@ namespace FitnessApp
             var weightEntryFrame = new Frame
             {
                 Padding = new Thickness(1), // Set padding to create a border effect
-                BackgroundColor = Color.FromArgb("#2A2A2A"),
+                BackgroundColor = Theme.InputBackground,
                 WidthRequest = 100, // Adjust the size as needed
                 HeightRequest = 35,
-                BorderColor = Color.FromRgb(140, 140, 140), // Set the border color
+                BorderColor = Theme.Border, // Set the border color
                 Content = new Entry
                 {
                     Placeholder = "Weight", // Always show "Weight" as the placeholder
                     Keyboard = Keyboard.Numeric,
                     TextColor = Colors.White,
-                    BackgroundColor = Color.FromArgb("#2A2A2A"),
+                    BackgroundColor = Theme.InputBackground,
                     WidthRequest = 100,
                     HeightRequest = 35,
                     Margin = new Thickness(5, 5, 0, 0),
@@ -167,16 +167,16 @@ namespace FitnessApp
             var repsEntryFrame = new Frame
             {
                 Padding = new Thickness(1),
-                BackgroundColor = Color.FromArgb("#2A2A2A"),
+                BackgroundColor = Theme.InputBackground,
                 WidthRequest = 75,
                 HeightRequest = 35,
-                BorderColor = Color.FromRgb(140, 140, 140),
+                BorderColor = Theme.Border,
                 Content = new Entry
                 {
                     Placeholder = "Reps", // Always show "Reps" as the placeholder
                     Keyboard = Keyboard.Numeric,
                     TextColor = Colors.White,
-                    BackgroundColor = Color.FromArgb("#2A2A2A"),
+                    BackgroundColor = Theme.InputBackground,
                     WidthRequest = 75,
                     HeightRequest = 35,
                     Margin = new Thickness(5, 5, 0, 0),
@@ -256,16 +256,16 @@ namespace FitnessApp
             var weightEntryFrame = new Frame
             {
                 Padding = new Thickness(1),
-                BackgroundColor = Color.FromArgb("#2A2A2A"),
+                BackgroundColor = Theme.InputBackground,
                 WidthRequest = 100,
                 HeightRequest = 35,
-                BorderColor = Color.FromRgb(140, 140, 140),
+                BorderColor = Theme.Border,
                 Content = new Entry
                 {
                     Placeholder = "Weight",
                     Keyboard = Keyboard.Numeric,
                     TextColor = Colors.White,
-                    BackgroundColor = Color.FromArgb("#2A2A2A"),
+                    BackgroundColor = Theme.InputBackground,
                     WidthRequest = 100,
                     HeightRequest = 35,
                     Margin = new Thickness(5, 5, 0, 0)
@@ -276,16 +276,16 @@ namespace FitnessApp
             var repsEntryFrame = new Frame
             {
                 Padding = new Thickness(1),
-                BackgroundColor = Color.FromArgb("#2A2A2A"),
+                BackgroundColor = Theme.InputBackground,
                 WidthRequest = 75,
                 HeightRequest = 35,
-                BorderColor = Color.FromRgb(140, 140, 140),
+                BorderColor = Theme.Border,
                 Content = new Entry
                 {
                     Placeholder = "Reps",
                     Keyboard = Keyboard.Numeric,
                     TextColor = Colors.White,
-                    BackgroundColor = Color.FromArgb("#2A2A2A"),
+                    BackgroundColor = Theme.InputBackground,
                     WidthRequest = 75,
                     HeightRequest = 35,
                     Margin = new Thickness(5, 5, 0, 0)
@@ -321,8 +321,8 @@ namespace FitnessApp
 
             var exerciseFrame = new Frame
             {
-                BorderColor = Color.FromRgb(140, 140, 140),
-                BackgroundColor = Color.FromArgb("#333333"),
+                BorderColor = Theme.Border,
+                BackgroundColor = Theme.CardBackground,
                 CornerRadius = 10,
                 Padding = new Thickness(10, 0, 0, 10),
                 Margin = new Thickness(0, 5, 0, 10),
@@ -346,8 +346,8 @@ namespace FitnessApp
 
             var muscleGroupFrame = new Frame
             {
-                BorderColor = Color.FromArgb("#FF0000"),
-                BackgroundColor = Color.FromArgb("#4A2A2A"),
+                BorderColor = Theme.Danger,
+                BackgroundColor = Theme.TagBackground,
                 CornerRadius = 5,
                 Padding = new Thickness(5),
                 HasShadow = false,
@@ -359,7 +359,7 @@ namespace FitnessApp
             var muscleGroupLabel = new Label
             {
                 Text = exercise.MuscleGroup.ToUpper(),
-                TextColor = Color.FromArgb("#FFFFFF"),
+                TextColor = Theme.TextPrimary,
                 FontAttributes = FontAttributes.Bold,
                 VerticalOptions = LayoutOptions.Center
             };
@@ -450,7 +450,7 @@ namespace FitnessApp
                 Text = exercise.Name,
                 FontAttributes = FontAttributes.Bold,
                 FontSize = 18,
-                TextColor = Color.FromArgb("#ffffff")
+                TextColor = Theme.TextPrimary
             };
 
             exerciseLayout.Children.Add(exerciseNameLabel);

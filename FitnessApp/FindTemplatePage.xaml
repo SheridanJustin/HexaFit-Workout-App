@@ -2,7 +2,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              x:Class="FitnessApp.FindTemplatePage"
              Title="Workout Templates"
-             BackgroundColor="#212121"
+             BackgroundColor="{StaticResource PageBackground}"
              >
 
     <!-- Main grid to contain both the content and the loading overlay -->
@@ -12,7 +12,7 @@
         <ScrollView VerticalOptions="FillAndExpand" HorizontalOptions="FillAndExpand">
             <StackLayout Padding="10">
                 <!-- Static Content -->
-                <Label Text="Workout" FontSize="50" TextColor="White" Padding="0,50,0,50"/>
+                <Label Text="Templates" FontSize="50" TextColor="White" Padding="0,50,0,50"/>
 
                 <!-- New Grid for "Custom Workouts" label and "Add Custom Workout" button -->
                 <Grid ColumnDefinitions="*,Auto"
@@ -27,7 +27,7 @@
 
                     <Button x:Name="AddWorkoutButton"
                             Text="Add"
-                            BackgroundColor="#4CAF50"
+                            BackgroundColor="{StaticResource AccentGreen}"
                             TextColor="White"
                             FontAttributes="Bold"
                             HeightRequest="30"

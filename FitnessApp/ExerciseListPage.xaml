@@ -4,7 +4,7 @@
              xmlns:toolkit="http://schemas.microsoft.com/dotnet/2022/maui/toolkit"
              x:Class="FitnessApp.ExerciseListPage"
              Title="Exercise List"
-             BackgroundColor="#212121">
+             BackgroundColor="{StaticResource PageBackground}">
 
     <!-- Main layout -->
     <StackLayout Padding="10" VerticalOptions="FillAndExpand" HorizontalOptions="FillAndExpand">
@@ -37,7 +37,7 @@
                    FontSize="16"
                    TextColor="White"
                    PlaceholderColor="LightGray"
-                   BackgroundColor="#333333"
+                   BackgroundColor="{StaticResource CardBackground}"
                    Margin="0,0,0,10"/>
 
         <!-- CollectionView to display images and exercise names -->
@@ -51,7 +51,7 @@
                     <StackLayout Orientation="Horizontal"
                                  Padding="10"
                                  Spacing="10"
-                                 BackgroundColor="#333333"
+                                 BackgroundColor="{StaticResource CardBackground}"
                                  Margin="5"
                                  VerticalOptions="CenterAndExpand">
                         <!-- SVG Image -->

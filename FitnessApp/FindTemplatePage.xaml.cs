@@ -51,7 +51,7 @@ namespace FitnessApp
                     {
                         Text = "No custom workouts found.",
                         FontSize = 16,
-                        TextColor = Color.FromArgb("#ffffff"),
+                        TextColor = Theme.TextPrimary,
                         HorizontalOptions = LayoutOptions.Center,
                         VerticalOptions = LayoutOptions.CenterAndExpand,
                         Margin = new Thickness(0, 10, 0, 10)
@@ -185,7 +185,7 @@ namespace FitnessApp
                     SampleTemplates.Children.Add(new Label
                     {
                         Text = "No workout templates found.",
-                        TextColor = Color.FromArgb("#ffffff"),
+                        TextColor = Theme.TextPrimary,
                         HorizontalOptions = LayoutOptions.Center,
                         VerticalOptions = LayoutOptions.CenterAndExpand
                     });
@@ -282,8 +282,8 @@ namespace FitnessApp
         {
             var workoutFrame = new Frame
             {
-                BorderColor = Color.FromRgb(140, 140, 140),
-                BackgroundColor = Color.FromArgb("#333333"),
+                BorderColor = Theme.Border,
+                BackgroundColor = Theme.CardBackground,
                 CornerRadius = 10,
                 Padding = new Thickness(10, 0, 0, 10),
                 Margin = new Thickness(0, 5, 0, 10),
@@ -297,8 +297,8 @@ namespace FitnessApp
 
             var titleLabelFrame = new Frame
             {
-                BorderColor = Color.FromArgb("#FF0000"),
-                BackgroundColor = Color.FromArgb("#4A2A2A"),
+                BorderColor = Theme.Danger,
+                BackgroundColor = Theme.TagBackground,
                 CornerRadius = 5,
                 Padding = new Thickness(5),
                 HasShadow = false,
@@ -310,7 +310,7 @@ namespace FitnessApp
             var titleLabel = new Label
             {
                 Text = session.Title.ToUpper(),
-                TextColor = Color.FromArgb("#FFFFFF"),
+                TextColor = Theme.TextPrimary,
                 FontAttributes = FontAttributes.Bold,
                 VerticalOptions = LayoutOptions.Center,
                 HorizontalOptions = LayoutOptions.Center,
@@ -392,9 +392,9 @@ namespace FitnessApp
 
             var lastPerformedLabel = new Label
             {
-                Text = $"Last Performed: {session.LastPerformed}",
+                Text = $"Last Performed: {(string.IsNullOrEmpty(session.LastPerformed) ? "Never" : session.LastPerformed)}",
                 FontSize = 14,
-                TextColor = Color.FromArgb("#D3D3D3")
+                TextColor = Theme.TextSecondary
             };
             workoutLayout.Children.Add(lastPerformedLabel);
 
@@ -404,7 +404,7 @@ namespace FitnessApp
                 {
                     Text = $"{exercise.Name} - {exercise.Sets.Count} sets",
                     FontSize = 14,
-                    TextColor = Color.FromArgb("#ffffff")
+                    TextColor = Theme.TextPrimary
                 };
                 workoutLayout.Children.Add(exerciseLabel);
             }

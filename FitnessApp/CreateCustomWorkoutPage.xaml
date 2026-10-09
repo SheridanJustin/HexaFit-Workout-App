@@ -3,7 +3,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              x:Class="FitnessApp.CreateCustomWorkoutPage"
              Title="Create Custom Workout"
-             BackgroundColor="#212121">
+             BackgroundColor="{StaticResource PageBackground}">
 
     <!-- Main Grid -->
     <Grid VerticalOptions="FillAndExpand" HorizontalOptions="FillAndExpand" Padding="10">
@@ -19,8 +19,8 @@
             <VerticalStackLayout>
                 <!-- Title in a Frame -->
                 <Frame
-                    BorderColor="#FF0000"
-                    BackgroundColor="#333333"
+                    BorderColor="{StaticResource Danger}"
+                    BackgroundColor="{StaticResource CardBackground}"
                     CornerRadius="10"
                     Padding="10"
                     Margin="0,15,0,10"
@@ -42,11 +42,11 @@
 
                 <!-- Add Exercise button below the title -->
                 <Button Text="ADD EXERCISE" 
-                        TextColor="#FF0000"
+                        TextColor="{StaticResource Danger}"
                         HorizontalOptions="Center"
                         VerticalOptions="Center"
                         FontSize="Medium"
-                        BackgroundColor="#212121"
+                        BackgroundColor="{StaticResource PageBackground}"
                         Margin="0,0,0,100"
                         Clicked="OnAddExerciseClicked"/>
             </VerticalStackLayout>
@@ -57,7 +57,7 @@
             <!-- Save Button -->
             <Button
                 Text="Save"
-                BackgroundColor="#4CAF50"
+                BackgroundColor="{StaticResource AccentGreen}"
                 TextColor="White"
                 FontAttributes="Bold"
                 HorizontalOptions="FillAndExpand"
@@ -69,7 +69,7 @@
             <!-- Cancel Button -->
             <Button
                 Text="Cancel"
-                BackgroundColor="#FF0000"
+                BackgroundColor="{StaticResource Danger}"
                 TextColor="White"
                 FontAttributes="Bold"
                 HorizontalOptions="FillAndExpand"

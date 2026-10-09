@@ -2,20 +2,15 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              x:Class="FitnessApp.MainPage"
              Padding="0,0,0,0"
-             BackgroundColor="#212121">
+             BackgroundColor="{StaticResource PageBackground}">
 
-    <StackLayout VerticalOptions="Start" HorizontalOptions="Center">
-
-     
-
-        <!-- Scrollable content for the first workout plan -->
-        <ScrollView VerticalOptions="FillAndExpand" HorizontalOptions="FillAndExpand" HorizontalScrollBarVisibility="Never" 
-            VerticalScrollBarVisibility="Never">
+    <!-- A Grid (not a StackLayout) lets the ScrollView fill the page and actually scroll -->
+    <Grid>
+        <ScrollView HorizontalScrollBarVisibility="Never"
+                    VerticalScrollBarVisibility="Never">
             <StackLayout x:Name="PlanContent" Padding="10">
-                <Label Text="Workout Screen" HorizontalOptions="FillAndExpand"  TextColor="White" HorizontalTextAlignment="Center"  />
                 <!-- The content will be dynamically added here -->
             </StackLayout>
         </ScrollView>
-
-    </StackLayout>
+    </Grid>
 </ContentPage>

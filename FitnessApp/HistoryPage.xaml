@@ -2,29 +2,41 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              x:Class="FitnessApp.HistoryPage"
              Title="Workout History"
-              BackgroundColor="#212121">
+             BackgroundColor="{StaticResource PageBackground}">
 
-
-    <StackLayout Padding="10">
-
-       
-
-        <!-- ScrollView inside StackLayout for better scrolling behavior -->
-        <ScrollView VerticalOptions="FillAndExpand" HorizontalOptions="FillAndExpand">
-            <StackLayout x:Name="HistoryContent">
-                <Frame
-                BorderColor="#8C8C8C"
-                BackgroundColor="#333333"
-                CornerRadius="10"
-                Padding="10"
-                Margin="0,0,0,0"
-                HasShadow="True">
-                    <Label Text="Previous Workouts" FontSize="Large" FontAttributes="Bold" HorizontalOptions="Center" TextColor="#e74040"/>
+    <!-- A Grid (not a StackLayout) lets the ScrollView fill the page and actually scroll -->
+    <Grid Padding="10">
+        <ScrollView x:Name="HistoryScroll" Scrolled="OnHistoryScrolled">
+            <StackLayout Spacing="8">
+                <Frame BorderColor="{StaticResource BorderGray}"
+                       BackgroundColor="{StaticResource CardBackground}"
+                       CornerRadius="10"
+                       Padding="10"
+                       HasShadow="True">
+                    <Label Text="Previous Workouts" FontSize="Large" FontAttributes="Bold" HorizontalOptions="Center" TextColor="{StaticResource Danger}"/>
                 </Frame>
 
+                <!-- Workouts are added here a page at a time as you scroll -->
+                <StackLayout x:Name="HistoryContent" Spacing="8" />
 
-                <!-- Workout data will be dynamically added here -->
+                <ActivityIndicator x:Name="LoadingMoreIndicator"
+                                   IsRunning="False"
+                                   IsVisible="False"
+                                   Color="White"
+                                   HeightRequest="32"
+                                   HorizontalOptions="Center" />
+
+                <Button x:Name="LoadMoreButton"
+                        Text="Load more"
+                        IsVisible="False"
+                        BackgroundColor="{StaticResource CardBackground}"
+                        BorderColor="{StaticResource BorderGray}"
+                        BorderWidth="1"
+                        TextColor="White"
+                        CornerRadius="10"
+                        Margin="0,0,0,10"
+                        Clicked="OnLoadMoreClicked" />
             </StackLayout>
         </ScrollView>
-    </StackLayout>
+    </Grid>
 </ContentPage>

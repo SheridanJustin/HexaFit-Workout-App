@@ -1,14 +1,11 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
-using System.Reflection;
 
 using Microsoft.Maui.Controls;
-using Microsoft.Maui.Controls.PlatformConfiguration;
-using Microsoft.Maui.Dispatching;
 using Newtonsoft.Json;
 using FitnessApp.Models;
-using System.Net.Mail;
 
 namespace FitnessApp
 {
@@ -17,101 +14,90 @@ namespace FitnessApp
 
     public partial class MainPage : ContentPage
     {
+        // One exercise card on screen. TemplateName is the name the exercise had in the
+        // template when the workout started, so renaming it mid-workout still updates the
+        // right "previous" values. It is null for exercises added during the workout.
+        private class ExerciseCard
+        {
+            public Frame Frame;
+            public Label NameLabel;
+            public StackLayout SetsLayout;
+            public string TemplateName;
+            public List<SetRow> Sets = new List<SetRow>();
+        }
 
-        private List<WorkoutSession> workoutPlans;
-        private WorkoutSession currentPlan;
+        private class SetRow
+        {
+            public Grid Grid;
+            public Label NumberLabel;
+            public Entry WeightEntry;
+            public Entry RepsEntry;
+            public Button CheckButton;
+            public bool IsCompleted;
+        }
+
+        private class LoggedExercise
+        {
+            public string TemplateName;
+            public CompletedExercise Completed;
+        }
+
         private int workoutCount = 0; // Store the workout count
-        private string TitleThatWorks;
         private Label _timerLabel;
         private WorkoutSession _currentWorkoutSession;
-        private List<Exercise> _exercises = new List<Exercise>();
-
-        public MainPage ReturnPage { get; set; } // Reference to the MainPage that called this
-        public StackLayout ExerciseLayout { get; set; } // The layout where the exercise will be added
-
+        private readonly Dictionary<Frame, ExerciseCard> _cards = new Dictionary<Frame, ExerciseCard>();
+        private Frame _insertAfterFrame; // Where "Add Exercise Below" should put the picked exercise
+        private Button _finishButton;
+        private bool _isSaving;
 
         private System.Timers.Timer _timer;
         private TimeSpan _elapsedTime;
         private readonly object _lock = new object(); // Prevents thread race conditions
-
-
 
         public Exercise SelectedExercise
         {
             get => null; // No need to return anything
             set
             {
-                if (value != null)
+                if (value == null || _currentWorkoutSession == null)
                 {
-                    // Add the selected exercise with two default sets
-                    value.Sets = new List<Set>
+                    return;
+                }
+
+                // Copy the picked exercise so the exercise list's own object is never changed
+                var exercise = new Exercise
                 {
-                    new Set { SetNumber = 1, Weight = 0, Reps = 0 },
-                    new Set { SetNumber = 2, Weight = 0, Reps = 0 }
+                    Name = value.Name,
+                    ImagePath = value.ImagePath,
+                    MuscleGroup = value.MuscleGroup,
+                    Sets = new List<Set>
+                    {
+                        new Set { SetNumber = 1 },
+                        new Set { SetNumber = 2 }
+                    }
                 };
 
-                    // Add the exercise to the current list of exercises
-                    _currentWorkoutSession.Exercises.Add(value);
-
-                    // Update the workout session display to include the newly added exercise
-                    DisplayWorkoutPlan(_currentWorkoutSession);
-                }
-            }
-        }
-
-
-
-
-
-
-        private void StartTimer()
-        {
-            // If a timer already exists, stop and dispose of it before creating a new one
-            if (_timer != null)
-            {
-                _timer.Stop();
-                _timer.Dispose();
-                _timer = null;
-            }
-
-            _elapsedTime = TimeSpan.Zero;
-
-            _timer = new System.Timers.Timer { Interval = 1000 }; // 1 second interval
-            _timer.Elapsed += OnTimedEvent;
-            _timer.AutoReset = true;
-            _timer.Start();
-        }
-
-
-        private void OnTimedEvent(object sender, System.Timers.ElapsedEventArgs e)
-        {
-            lock (_lock) // Ensures thread safety
-            {
-                _elapsedTime = _elapsedTime.Add(TimeSpan.FromSeconds(1));
-
-                // Update the timer label on the UI thread
-                MainThread.BeginInvokeOnMainThread(() =>
+                // Insert the new card without rebuilding the page, so typed sets and the timer survive
+                var frame = CreateExerciseFrame(exercise, templateName: null);
+                int index = _insertAfterFrame != null ? PlanContent.Children.IndexOf(_insertAfterFrame) : -1;
+                if (index >= 0)
                 {
-                    _timerLabel.Text = _elapsedTime.ToString(@"hh\:mm\:ss");
-                });
-            }
-        }
+                    PlanContent.Children.Insert(index + 1, frame);
+                }
+                else
+                {
+                    int finishIndex = _finishButton != null ? PlanContent.Children.IndexOf(_finishButton) : -1;
+                    if (finishIndex >= 0)
+                    {
+                        PlanContent.Children.Insert(finishIndex, frame);
+                    }
+                    else
+                    {
+                        PlanContent.Children.Add(frame);
+                    }
+                }
 
-        private void StopTimer()
-        {
-            _timer?.Stop();
-            _timer?.Dispose();
-        }
-
-        public MainPage()
-        {
-            InitializeComponent();
-
-            LoadWorkoutCount();
-
-            if (workoutPlans == null || workoutPlans.Count == 0)
-            {
-                DisplayNoWorkoutMessage(); // Display default message if no workout is loaded
+                _insertAfterFrame = null;
             }
         }
 
@@ -122,15 +108,64 @@ namespace FitnessApp
             get => _selectedWorkout;
             set
             {
-                _selectedWorkout = value;
-                if (_selectedWorkout != null)
+                if (value == null || ReferenceEquals(value, _selectedWorkout))
                 {
-                    DisplayWorkoutPlan(_selectedWorkout);
+                    return;
                 }
+
+                _selectedWorkout = value;
+                DisplayWorkoutPlan(_selectedWorkout);
             }
         }
 
+        public MainPage()
+        {
+            InitializeComponent();
 
+            LoadWorkoutCount();
+            DisplayNoWorkoutMessage();
+        }
+
+        private void StartTimer()
+        {
+            StopTimer();
+
+            _elapsedTime = TimeSpan.Zero;
+
+            _timer = new System.Timers.Timer { Interval = 1000 }; // 1 second interval
+            _timer.Elapsed += OnTimedEvent;
+            _timer.AutoReset = true;
+            _timer.Start();
+        }
+
+        private void OnTimedEvent(object sender, System.Timers.ElapsedEventArgs e)
+        {
+            lock (_lock) // Ensures thread safety
+            {
+                _elapsedTime = _elapsedTime.Add(TimeSpan.FromSeconds(1));
+                var text = _elapsedTime.ToString(@"hh\:mm\:ss");
+
+                // Update the timer label on the UI thread
+                MainThread.BeginInvokeOnMainThread(() =>
+                {
+                    if (_timerLabel != null)
+                    {
+                        _timerLabel.Text = text;
+                    }
+                });
+            }
+        }
+
+        private void StopTimer()
+        {
+            if (_timer != null)
+            {
+                _timer.Stop();
+                _timer.Elapsed -= OnTimedEvent;
+                _timer.Dispose();
+                _timer = null;
+            }
+        }
 
         // Display a message and button to select a workout
         private void DisplayNoWorkoutMessage()
@@ -150,7 +185,7 @@ namespace FitnessApp
             var messageLabel = new Label
             {
                 Text = "Select a workout from the templates page.",
-                TextColor = Color.FromArgb("#ffffff"),
+                TextColor = Theme.TextPrimary,
                 HorizontalOptions = LayoutOptions.Center,
                 VerticalOptions = LayoutOptions.Start,
                 FontSize = 16,
@@ -160,11 +195,12 @@ namespace FitnessApp
             var selectButton = new Button
             {
                 Text = "Go to Templates",
-                BackgroundColor = Color.FromArgb("#4CAF50"),
-                TextColor = Color.FromArgb("#ffffff"),
+                BackgroundColor = Theme.Accent,
+                TextColor = Theme.TextPrimary,
                 FontAttributes = FontAttributes.Bold,
                 CornerRadius = 10,
                 HeightRequest = 50,
+                Padding = new Thickness(24, 0),
                 Margin = new Thickness(0, 10, 0, 0),
                 HorizontalOptions = LayoutOptions.Center,
                 VerticalOptions = LayoutOptions.Start,
@@ -178,121 +214,55 @@ namespace FitnessApp
                 await Shell.Current.GoToAsync("//Templates");
             };
 
-            var scanButton = new Button
-            {
-                Text = "Go to Scan",
-                BackgroundColor = Color.FromArgb("#2196F3"),
-                TextColor = Color.FromArgb("#ffffff"),
-                FontAttributes = FontAttributes.Bold,
-                CornerRadius = 10,
-                HeightRequest = 50,
-                Margin = new Thickness(0, 10, 0, 0),
-                HorizontalOptions = LayoutOptions.Center,
-                VerticalOptions = LayoutOptions.Start,
-            };
-
-            scanButton.Clicked += async (s, e) =>
-            {
-                await scanButton.ScaleTo(0.9, 100, Easing.CubicIn);
-                await scanButton.ScaleTo(1, 100, Easing.CubicOut);
-
-                await Navigation.PushAsync(new ScanPage()); 
-            };
-
             PlanContent.Children.Add(image);
             PlanContent.Children.Add(messageLabel);
             PlanContent.Children.Add(selectButton);
-            PlanContent.Children.Add(scanButton);
         }
 
-
-
-
-        private async void OnAddExerciseBelow(StackLayout currentExerciseLayout)
+        public void DisplayWorkoutPlan(WorkoutSession session)
         {
-            // Navigate to SelectExercisePage and wait for the user to select an exercise
-            await Navigation.PushAsync(new SelectExercisePage());
-        }
-
-        public void AddSelectedExercise(Exercise selectedExercise, StackLayout currentExerciseLayout)
-        {
-            if (selectedExercise != null)
-            {
-                // Add two default sets to the newly added exercise
-                selectedExercise.Sets = new List<Set>
-        {
-            new Set { SetNumber = 1, Weight = 0, Reps = 0 },
-            new Set { SetNumber = 2, Weight = 0, Reps = 0 }
-        };
-
-                // Create the new exercise frame
-                var newExerciseFrame = CreateExerciseFrame(selectedExercise);
-
-                // Find the index of the current exercise frame
-                int currentFrameIndex = PlanContent.Children.IndexOf(currentExerciseLayout.Parent as Frame);
-
-                // Insert the new exercise frame right after the current one
-                PlanContent.Children.Insert(currentFrameIndex + 1, newExerciseFrame);
-
-                // Add the new exercise to the current workout session's exercises list
-                _currentWorkoutSession.Exercises.Add(selectedExercise);
-            }
-        }
-
-
-        public async void DisplayWorkoutPlan(WorkoutSession session)
-        {
-            _currentWorkoutSession = session;
-            PlanContent.Children.Clear();
-
-            TitleThatWorks = session.Title;
-
             if (session == null)
             {
-                PlanContent.Children.Add(new Label
-                {
-                    Text = "No workout plan available.",
-                    TextColor = Color.FromArgb("#ffffff"),
-                    HorizontalOptions = LayoutOptions.Center
-                });
+                DisplayNoWorkoutMessage();
                 return;
             }
 
-            var uiElements = new List<View>();
+            _currentWorkoutSession = session;
+            _cards.Clear();
+            _insertAfterFrame = null;
+            PlanContent.Children.Clear();
 
             // Grid to organize the timer, title, and cancel button
             var titleGrid = new Grid
             {
                 ColumnDefinitions =
-        {
-            new ColumnDefinition { Width = GridLength.Star },
-            new ColumnDefinition { Width = GridLength.Auto }
-        },
+                {
+                    new ColumnDefinition { Width = GridLength.Star },
+                    new ColumnDefinition { Width = GridLength.Auto }
+                },
                 RowDefinitions =
-        {
-            new RowDefinition { Height = GridLength.Auto },
-            new RowDefinition { Height = GridLength.Auto }
-        }
+                {
+                    new RowDefinition { Height = GridLength.Auto },
+                    new RowDefinition { Height = GridLength.Auto }
+                }
             };
 
-
-            var HeaderFrame = new Frame
+            var headerFrame = new Frame
             {
-                BorderColor = Color.FromRgb(140, 140, 140),
-                BackgroundColor = Color.FromArgb("#333333"),
+                BorderColor = Theme.Border,
+                BackgroundColor = Theme.CardBackground,
                 CornerRadius = 10,
                 Padding = new Thickness(10),
                 Margin = new Thickness(0, 5, 0, 10),
                 HasShadow = true
             };
 
-
             _timerLabel = new Label
             {
                 Text = "00:00:00",
                 FontAttributes = FontAttributes.Bold,
                 FontSize = 18,
-                TextColor = Color.FromArgb("#cccccc"),
+                TextColor = Theme.TextSecondary,
                 Margin = new Thickness(10, 0, 10, 0),
                 VerticalOptions = LayoutOptions.Center,
                 HorizontalOptions = LayoutOptions.Start
@@ -304,7 +274,7 @@ namespace FitnessApp
                 FontAttributes = FontAttributes.Bold,
                 Margin = new Thickness(10, 0, 10, 0),
                 FontSize = 20,
-                TextColor = Color.FromArgb("#ffffff"),
+                TextColor = Theme.TextPrimary,
                 VerticalOptions = LayoutOptions.Center,
                 HorizontalOptions = LayoutOptions.Start
             };
@@ -312,18 +282,16 @@ namespace FitnessApp
             var cancelButton = new Button
             {
                 Text = "Cancel",
-                BackgroundColor = Color.FromArgb("#FF0000"),
-                TextColor = Color.FromArgb("#ffffff"),
+                BackgroundColor = Theme.Danger,
+                TextColor = Theme.TextPrimary,
                 FontAttributes = FontAttributes.Bold,
+                CornerRadius = 10,
                 VerticalOptions = LayoutOptions.Center,
                 HorizontalOptions = LayoutOptions.End,
-                Padding = new Thickness(10)
+                Padding = new Thickness(16, 10)
             };
 
-
-           
-
-            cancelButton.Clicked += (s, e) => OnCancelButtonClicked(s, e, session);
+            cancelButton.Clicked += OnCancelButtonClicked;
 
             titleGrid.Children.Add(titleLabel);
             Grid.SetRow(titleLabel, 0);
@@ -332,840 +300,47 @@ namespace FitnessApp
             titleGrid.Children.Add(cancelButton);
             Grid.SetRow(cancelButton, 0);
             Grid.SetColumn(cancelButton, 1);
+            Grid.SetRowSpan(cancelButton, 2);
 
             titleGrid.Children.Add(_timerLabel);
             Grid.SetRow(_timerLabel, 1);
             Grid.SetColumn(_timerLabel, 0);
 
-            HeaderFrame.Content = titleGrid;
+            headerFrame.Content = titleGrid;
+            PlanContent.Children.Add(headerFrame);
 
-            uiElements.Add(HeaderFrame);
-            StartTimer();
-
-            foreach (var exercise in session.Exercises)
+            foreach (var exercise in session.Exercises ?? new List<Exercise>())
             {
-                var exerciseFrame = new Frame
-                {
-                    BorderColor = Color.FromRgb(140, 140, 140),
-                    BackgroundColor = Color.FromArgb("#333333"),
-                    CornerRadius = 10,
-                    Padding = new Thickness(10,0,0,10),
-                    Margin = new Thickness(0, 5, 0, 10),
-                    HasShadow = true
-                };
-
-                var exerciseLayout = new StackLayout
-                {
-                    Spacing = 5,
-                    Margin = new Thickness(0, 5, 0, 7)
-                };
-
-                var muscleGroupGrid = new Grid
-                {
-                    ColumnDefinitions =
-            {
-                new ColumnDefinition { Width = GridLength.Star },
-                new ColumnDefinition { Width = GridLength.Auto }
-            }
-                };
-
-                var muscleGroupFrame = new Frame
-                {
-                    BorderColor = Color.FromArgb("#FF0000"),
-                    BackgroundColor = Color.FromArgb("#4A2A2A"),
-                    CornerRadius = 5,
-                    Padding = new Thickness(5),
-                    HasShadow = false,
-                    Margin = new Thickness(0, 5, 0, 7),
-                    HorizontalOptions = LayoutOptions.Start,
-                    VerticalOptions = LayoutOptions.Center
-                };
-
-                var muscleGroupLabel = new Label
-                {
-                    Text = exercise.MuscleGroup.ToUpper(),
-                    TextColor = Color.FromArgb("#FFFFFF"),
-                    FontAttributes = FontAttributes.Bold,
-                    VerticalOptions = LayoutOptions.Center
-                };
-
-                muscleGroupFrame.Content = muscleGroupLabel;
-                muscleGroupGrid.Children.Add(muscleGroupFrame);
-                Grid.SetColumn(muscleGroupFrame, 0);
-
-                var menuButton = new Button
-                {
-                    ImageSource = "menu.png",
-                    BackgroundColor = Colors.Transparent,
-                    WidthRequest = 62,
-                    HeightRequest = 62,
-                    VerticalOptions = LayoutOptions.Center,
-                    HorizontalOptions = LayoutOptions.End
-                };
-
-                menuButton.Clicked += async (s, e) =>
-                {
-                    string action = await DisplayActionSheet("Options", "Cancel", null, "Delete Exercise", "Rename Exercise", "Add Set", "Add Exercise Below");
-
-                    if (action == "Delete Exercise")
-                    {
-                        PlanContent.Children.Remove(exerciseFrame);
-                    }
-                    else if (action == "Rename Exercise")
-                    {
-                        string newName = await DisplayPromptAsync("Rename Exercise", "Enter the new name for the exercise:", "OK", "Cancel", "Exercise Name");
-
-                        if (!string.IsNullOrEmpty(newName))
-                        {
-                            var exerciseNameLabel = exerciseLayout.Children.OfType<Label>().FirstOrDefault();
-                            if (exerciseNameLabel != null)
-                            {
-                                exerciseNameLabel.Text = newName;
-                            }
-                        }
-                    }
-                    else if (action == "Add Set")
-                    {
-                        AddSetToExercise(exerciseLayout);
-                    }
-                    else if (action == "Add Exercise Below")
-                    {
-                        OnAddExerciseBelow(exerciseLayout); // Add the new exercise below the current one
-                    }
-                };
-
-                muscleGroupGrid.Children.Add(menuButton);
-                Grid.SetColumn(menuButton, 1);
-
-                exerciseLayout.Children.Add(muscleGroupGrid);
-
-                exerciseLayout.Children.Add(new Label
-                {
-                    Text = exercise.Name,
-                    FontAttributes = FontAttributes.Bold,
-                    FontSize = 18,
-                    TextColor = Color.FromArgb("#ffffff")
-                });
-
-                var labelGrid = new Grid
-                {
-                    ColumnDefinitions =
-            {
-                new ColumnDefinition { Width = GridLength.Auto },
-                new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) },
-                new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) },
-                new ColumnDefinition { Width = GridLength.Auto }
-            },
-                    Margin = new Thickness(0, 5, 0, 0)
-                };
-
-                var weightLabel = new Label
-                {
-                    Text = "Weight",
-                    FontAttributes = FontAttributes.Bold,
-                    FontSize = 14,
-                    TextColor = Color.FromArgb("#D3D3D3"),
-                    HorizontalOptions = LayoutOptions.Center,
-                    Margin = new Thickness(25, 0, 0, 0)
-                };
-                labelGrid.Children.Add(weightLabel);
-                Grid.SetColumn(weightLabel, 1);
-
-                var repsLabel = new Label
-                {
-                    Text = "Reps",
-                    FontAttributes = FontAttributes.Bold,
-                    FontSize = 14,
-                    TextColor = Color.FromArgb("#D3D3D3"),
-                    HorizontalOptions = LayoutOptions.Start,
-                    Margin = new Thickness(38, 0, 0, 0)
-                };
-                labelGrid.Children.Add(repsLabel);
-                Grid.SetColumn(repsLabel, 2);
-
-                exerciseLayout.Children.Add(labelGrid);
-
-                foreach (var set in exercise.Sets)
-                {
-                    var grid = new Grid
-                    {
-                        ColumnDefinitions =
-                {
-                    new ColumnDefinition { Width = GridLength.Auto },
-                    new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) },
-                    new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) },
-                    new ColumnDefinition { Width = GridLength.Auto }
-                },
-                        Margin = new Thickness(0, 5, 0, 5)
-                    };
-
-                    var actionButton = new Button
-                    {
-                        ImageSource = "menu.png",
-                        BackgroundColor = Color.FromRgba(0, 0, 0, 0),
-                        WidthRequest =40,
-                        HeightRequest = 40,
-                        Padding = new Thickness(5),
-                        Margin = new Thickness(0, 0, 10, 0)
-                    };
-
-                    actionButton.Clicked += async (s, e) =>
-                    {
-                        string action = await DisplayActionSheet("Options", "Cancel", null, "Remove Set", "Add Set Below");
-
-                        if (action == "Remove Set")
-                        {
-                            exerciseLayout.Children.Remove(grid);
-                        }
-                        else if (action == "Add Set Below")
-                        {
-                            AddSetBelow(grid, exerciseLayout);
-                        }
-                    };
-
-                 
-                    string weightUnit = "lbs";
-
-
-                    var weightEntry = new Entry
-                    {
-                        Placeholder = set.PreviousWeight > 0 ? $"{set.PreviousWeight} {weightUnit}" : $"{("Pounds/Lb")}",
-                        Keyboard = Keyboard.Numeric,
-                        TextColor = Color.FromArgb("#ffffff"),
-                        BackgroundColor = Color.FromArgb("#2A2A2A"),
-                        WidthRequest = 100,
-                        HeightRequest = 35,
-                        Margin = new Thickness(10, 5, 0, 0)
-                    };
-
-                    var weightEntryFrame = new Frame
-                    {
-                        Padding = new Thickness(1),
-                        BackgroundColor = Color.FromArgb("#2A2A2A"),
-                        WidthRequest = 100,
-                        HeightRequest = 35,
-                        BorderColor = Color.FromRgb(140, 140, 140),
-                        HasShadow = false
-                    };
-
-                    weightEntryFrame.Content = weightEntry;
-
-                    var repsEntry = new Entry
-                    {
-                        Placeholder = set.PreviousReps > 0 ? $"{set.PreviousReps} reps" : "Reps",
-                        Keyboard = Keyboard.Numeric,
-                        TextColor = Color.FromArgb("#ffffff"),
-                        BackgroundColor = Color.FromArgb("#2A2A2A"),
-                        WidthRequest = 75,
-                        HeightRequest = 35,
-                        Margin = new Thickness(10, 5, 0, 0)
-                    };
-
-                    var repsEntryFrame = new Frame
-                    {
-                        Padding = new Thickness(1),
-                        BackgroundColor = Color.FromArgb("#2A2A2A"),
-                        WidthRequest = 75,
-                        HeightRequest = 35,
-                        BorderColor = Color.FromRgb(140, 140, 140),
-                        HasShadow = false
-                    };
-
-                    repsEntryFrame.Content = repsEntry;
-
-                    var checkButton = CreateCheckButton(weightEntry, repsEntry);
-
-                    grid.Children.Add(actionButton);
-                    Grid.SetColumn(actionButton, 0);
-
-                    grid.Children.Add(weightEntryFrame);
-                    Grid.SetColumn(weightEntryFrame, 1);
-
-                    grid.Children.Add(repsEntryFrame);
-                    Grid.SetColumn(repsEntryFrame, 2);
-
-                    grid.Children.Add(checkButton);
-                    Grid.SetColumn(checkButton, 3);
-
-                    exerciseLayout.Children.Add(grid);
-                }
-
-                exerciseFrame.Content = exerciseLayout;
-                uiElements.Add(exerciseFrame);
+                PlanContent.Children.Add(CreateExerciseFrame(exercise, exercise.Name));
             }
 
-            var finishButton = new Button
+            _finishButton = new Button
             {
                 Text = "Finish Workout",
-                BackgroundColor = Color.FromArgb("#4CAF50"),
-                TextColor = Color.FromArgb("#ffffff"),
+                BackgroundColor = Theme.Accent,
+                TextColor = Theme.TextPrimary,
                 FontAttributes = FontAttributes.Bold,
                 CornerRadius = 10,
                 HeightRequest = 50,
-                Margin = new Thickness(0, 20, 0, 0),
-                HorizontalOptions = LayoutOptions.FillAndExpand
+                Margin = new Thickness(0, 20, 0, 20),
+                HorizontalOptions = LayoutOptions.Fill
             };
 
-            finishButton.Clicked += (s, e) => OnFinishButtonClicked(s, e, session);
+            _finishButton.Clicked += OnFinishButtonClicked;
+            PlanContent.Children.Add(_finishButton);
 
-            uiElements.Add(finishButton);
-
-            // Manually add each element to PlanContent.Children
-            foreach (var element in uiElements)
-            {
-                PlanContent.Children.Add(element);
-            }
+            StartTimer();
         }
 
-        private Button CreateCheckButton(Entry weightEntry, Entry repsEntry)
-        {
-            var checkButton = new Button
-            {
-                Text = "✔", // Placeholder text, you can replace with an icon if needed
-                TextColor = Color.FromRgba("#212121"),
-                BackgroundColor = Color.FromRgba(0, 0, 0, 0), // Fully transparent background
-                WidthRequest = 35, // Adjust the size as needed
-                HeightRequest = 35,
-                Padding = new Thickness(5), // Add padding to ensure the icon is centered
-                Margin = new Thickness(0, 0, 10, 0), // Add space to the right (10 units in this example)
-                IsEnabled = false // Initially disabled
-            };
-
-            weightEntry.TextChanged += (s, e) => ValidateSetCompletion(weightEntry, repsEntry, checkButton);
-            repsEntry.TextChanged += (s, e) => ValidateSetCompletion(weightEntry, repsEntry, checkButton);
-
-            checkButton.Clicked += async (s, e) =>
-            {
-                // If the button is already green, it means it has been pressed before
-                if (checkButton.BackgroundColor == Color.FromArgb("#4CAF50"))
-                {
-                    return; // Exit early, preventing further clicks
-                }
-
-                // Perform the animation
-                await checkButton.ScaleTo(0.9, 100, Easing.CubicIn);
-                await checkButton.ScaleTo(1, 100, Easing.CubicOut);
-
-               
-
-                // Mark the button as pressed by changing its color and disabling it
-                checkButton.BackgroundColor = Color.FromArgb("#4CAF50"); // Green color
-                checkButton.TextColor = Color.FromArgb("#ffffff");
-                checkButton.IsEnabled = false; // Disable the button to prevent further clicks
-            };
-
-            return checkButton;
-        }
-
-
-
-
-        private void AddSetBelow(Grid gridAbove, StackLayout exerciseLayout)
-        {
-            var grid = new Grid
-            {
-                ColumnDefinitions =
-        {
-            new ColumnDefinition { Width = GridLength.Auto }, // Icon Button
-            new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) }, // Weight Entry
-            new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) }, // Reps Entry
-            new ColumnDefinition { Width = GridLength.Auto }  // Checkmark Button
-        },
-                Margin = new Thickness(0, 5, 0, 5)
-            };
-
-            var actionButton = new Button
-            {
-                ImageSource = "menu.png",
-                BackgroundColor = Colors.Transparent, // Fully transparent background
-                WidthRequest = 40,
-                HeightRequest = 40,
-                Padding = new Thickness(5),
-                Margin = new Thickness(0, 0, 10, 0) // Add space to the right
-            };
-
-            actionButton.Clicked += async (s, e) =>
-            {
-                string action = await DisplayActionSheet("Options", "Cancel", null, "Remove Set", "Add Set Below");
-
-                if (action == "Remove Set")
-                {
-                    // Remove the current grid (set)
-                    exerciseLayout.Children.Remove(grid);
-                }
-                else if (action == "Add Set Below")
-                {
-                    // Add a new set below the current one
-                    AddSetBelow(grid, exerciseLayout);
-                }
-            };
-
-            // Define the Entry for weight
-            var weightEntry = new Entry
-            {
-                Placeholder = $"Pounds/Lb",
-                Keyboard = Keyboard.Numeric,
-                TextColor = Color.FromArgb("#ffffff"),  // White color
-                BackgroundColor = Color.FromArgb("#2A2A2A"),  // Darker background for input
-                WidthRequest = 100, // Adjust the size as needed
-                HeightRequest = 35,
-                Margin = new Thickness(10, 5, 0, 0)
-
-            };
-
-
-
-            // Define the Frame for the weight entry
-            var weightEntryFrame = new Frame
-            {
-                Padding = new Thickness(1), // Set padding to create a border effect
-                BackgroundColor = Color.FromArgb("#2A2A2A"),
-                WidthRequest = 100, // Adjust the size as needed
-                HeightRequest = 35,
-                BorderColor = Color.FromRgb(140, 140, 140), // Set the border color
-                HasShadow = false // Optional: Disable the shadow if you only want the border
-            };
-
-            // Add the weightEntry to the weightEntryFrame
-            weightEntryFrame.Content = weightEntry;
-
-            var repsEntry = new Entry
-            {
-                Placeholder = $"Reps",
-                Keyboard = Keyboard.Numeric,
-                TextColor = Color.FromArgb("#ffffff"),  // White color
-                BackgroundColor = Color.FromArgb("#2A2A2A"),  // Darker background for input
-                WidthRequest = 75, // Adjust the size as needed
-                HeightRequest = 35,
-                Margin = new Thickness(10, 5, 0, 0)
-            };
-
-            var repsEntryFrame = new Frame
-            {
-                Padding = new Thickness(1), // Set padding to create a border effect
-                BackgroundColor = Color.FromArgb("#2A2A2A"), // Set background color
-                WidthRequest = 75, // Adjust the size as needed
-                HeightRequest = 35,
-                BorderColor = Color.FromRgb(140, 140, 140), // Set the border color
-                HasShadow = false // Optional: Disable the shadow if you only want the border
-            };
-
-
-
-            // Add the repsEntry to the repsEntryFrame
-            repsEntryFrame.Content = repsEntry;
-
-
-            Button checkmarkButton = CreateCheckButton(weightEntry, repsEntry);
-
-            // Add the Button (icon), Weight, Reps Entry, and Checkmark Button to the grid
-            grid.Children.Add(actionButton);
-            Grid.SetColumn(actionButton, 0);
-
-            grid.Children.Add(weightEntryFrame);
-            Grid.SetColumn(weightEntryFrame, 1);
-
-            grid.Children.Add(repsEntryFrame);
-            Grid.SetColumn(repsEntryFrame, 2);
-
-            grid.Children.Add(checkmarkButton);
-            Grid.SetColumn(checkmarkButton, 3);
-
-            // Add the grid below the existing grid
-            int index = exerciseLayout.Children.IndexOf(gridAbove);
-            exerciseLayout.Children.Insert(index + 1, grid);
-        } // Full method involoving everything needed to create a set below
-
-        private void ValidateSetCompletion(Entry weightEntry, Entry repsEntry, Button checkmarkButton)
-        {
-            if (!string.IsNullOrEmpty(weightEntry.Text) && !string.IsNullOrEmpty(repsEntry.Text))
-            {
-                checkmarkButton.IsEnabled = true;
-                checkmarkButton.BackgroundColor = Color.FromArgb("#999999"); // Gray background when both entries are filled
-            }
-            else
-            {
-                checkmarkButton.IsEnabled = false;
-                checkmarkButton.BackgroundColor = Color.FromRgba(0, 0, 0, 0); // Fully transparent when disabled
-            }
-        }
-
-        private async void OnFinishButtonClicked(object sender, EventArgs e, WorkoutSession workoutSession)
-        {
-            try
-            {
-                // Collect workout data and check for empty sets
-                workoutSession = CollectWorkoutData(workoutSession, out bool hasEmptySets);
-
-                if (workoutSession == null)
-                {
-                    await DisplayAlert("Warning", "Please input at least one set!", "Ok");
-                    return;
-                }
-
-                if (hasEmptySets)
-                {
-                    bool proceed = await DisplayAlert("Warning", "Some exercises have empty sets and will not be saved. Do you want to continue?", "Yes", "No");
-                    if (!proceed)
-                    {
-                        return; // Exit if the user doesn't want to proceed
-                    }
-                }
-
-                
-
-#if ANDROID
-                var path = FileSystem.AppDataDirectory; // ✅ fixed to AppDataDirectory
-
-                string historyFileName = $"History_{DateTime.Now:yyyy-MM-dd_HH-mm-ss}_Workout.json";
-                string filePath = Path.Combine(path, historyFileName);
-
-                // Serialize the workout session
-                string json = JsonConvert.SerializeObject(workoutSession, Formatting.Indented);
-                File.WriteAllText(filePath, json);
-
-                // Update the original workout file with the latest data
-                UpdateOriginalWorkoutFile(workoutSession, path);
-
-                // Increment and save the workout count
-                workoutCount++;
-                SaveWorkoutCount();
-                StopTimer();
-
-                // Clear the content after successfully saving the workout
-                PlanContent.Children.Clear();
-                DisplayNoWorkoutMessage();
-
-                // Flag the workout as inactive
-                App.IsWorkoutActive = false;
-
-                await DisplayAlert("Workout Finished", $"You have completed {workoutCount} workouts. View previous workouts under the history tab.", "OK");
-#else
-    await DisplayAlert("Not Supported", "Workout saving is only supported on Android for now.", "OK");
-#endif
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Exception occurred: {ex.Message}");
-                await DisplayAlert("Error", "An unexpected error occurred.", "OK");
-            }
-        }
-
-
-
-
-
-        private void UpdateOriginalWorkoutFile(WorkoutSession completedSession, string directory)
-        {
-            // Construct the file path directly using the Id
-            string originalWorkoutFilePath = Path.Combine(directory, $"{completedSession.Id}.json");
-
-            if (!File.Exists(originalWorkoutFilePath))
-            {
-                Console.WriteLine($"Error: Original workout file with Id {completedSession.Id} not found.");
-                return;
-            }
-
-            // Load the original workout session
-            var originalWorkoutJson = File.ReadAllText(originalWorkoutFilePath);
-            var originalWorkout = JsonConvert.DeserializeObject<WorkoutSession>(originalWorkoutJson);
-
-            // Update the original workout with the latest data
-            foreach (var completedExercise in completedSession.CompletedExercises)
-            {
-                var originalExercise = originalWorkout.Exercises.FirstOrDefault(e => e.Name == completedExercise.Name);
-
-                if (originalExercise != null)
-                {
-                    for (int i = 0; i < completedExercise.Sets.Count; i++)
-                    {
-                        var completedSet = completedExercise.Sets[i];
-                        var originalSet = originalExercise.Sets[i];
-
-                        if (originalSet != null)
-                        {
-                            originalSet.PreviousWeight = completedSet.Weight;
-                            originalSet.PreviousReps = completedSet.Reps;
-                        }
-                    }
-                }
-            }
-
-            originalWorkout.LastPerformed = DateTime.Now.ToString("yyyy-MM-dd");
-
-            // Save the updated workout session back to the original file
-            var updatedWorkoutJson = JsonConvert.SerializeObject(originalWorkout, Formatting.Indented);
-            File.WriteAllText(originalWorkoutFilePath, updatedWorkoutJson);
-        }
-
-
-
-        private WorkoutSession CollectWorkoutData(WorkoutSession workoutSession, out bool hasEmptySets)
-        {
-            hasEmptySets = false;
-
-
-            workoutSession.Date = DateTime.Today.ToString("yyyy-MM-dd");
-            Console.WriteLine($"CollectWorkoutData DATE = {workoutSession.Date}");
-
-            foreach (var exerciseFrame in PlanContent.Children)
-            {
-                if (exerciseFrame is Frame frame && frame.Content is StackLayout exerciseLayout)
-                {
-                    var exerciseName = ((Label)exerciseLayout.Children[1]).Text;
-
-                    if (string.IsNullOrEmpty(exerciseName))
-                    {
-                        Console.WriteLine("Error: exerciseName is null or empty.");
-                        continue;
-                    }
-
-                    var completedExercise = new CompletedExercise
-                    {
-                        Name = exerciseName,
-                        Sets = new List<CompletedSet>()
-                    };
-
-                    foreach (var setGrid in exerciseLayout.Children.OfType<Grid>())
-                    {
-                        if (setGrid.Children.Count == 4)
-                        {
-                            var weightEntry = ((Frame)setGrid.Children[1]).Content as Entry;
-                            var repsEntry = ((Frame)setGrid.Children[2]).Content as Entry;
-
-                            if (!string.IsNullOrEmpty(weightEntry?.Text) && !string.IsNullOrEmpty(repsEntry?.Text))
-                            {
-                                var completedSet = new CompletedSet
-                                {
-                                    Weight = double.Parse(weightEntry.Text),
-                                    Reps = int.Parse(repsEntry.Text),
-                                    Completed = true
-                                };
-
-                                completedExercise.Sets.Add(completedSet);
-                            }
-                            else
-                            {
-                                hasEmptySets = true;
-                            }
-                        }
-                    }
-
-                    if (completedExercise.Sets.Count > 0)
-                    {
-                        workoutSession.CompletedExercises.Add(completedExercise);
-                    }
-                }
-            }
-
-            if (workoutSession.CompletedExercises.Count == 0)
-            {
-                return null;
-            }
-
-            return workoutSession;
-        }
-
-
-
-        private async void OnCancelButtonClicked(object sender, EventArgs e, WorkoutSession workoutSession)
-        {
-            try
-            {
-                var workoutSessionWithSets = CollectWorkoutData(workoutSession, out bool hasEmptySets);
-
-                if (workoutSessionWithSets != null)
-                {
-                    bool proceed = await DisplayAlert("Warning", "Some sets have data that will be lost. Do you want to continue?", "Yes", "No");
-                    if (!proceed)
-                    {
-                        return; // Exit if the user doesn't want to proceed
-                    }
-                }
-
-                // Stop the timer and clear the content
-                StopTimer();
-                PlanContent.Children.Clear();
-                DisplayNoWorkoutMessage();
-
-                // Flag the workout as inactive
-                App.IsWorkoutActive = false;
-
-                await DisplayAlert("Workout Canceled", "Your workout has been canceled.", "OK");
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Exception occurred: {ex.Message}");
-                await DisplayAlert("Error", "An unexpected error occurred.", "OK");
-            }
-        }
-
-
-
-        private void AddSetToExercise(StackLayout exerciseLayout)
-        {
-            // Create a grid to hold the Button (icon), Weight, Reps entries, and Checkmark Button side by side
-            var grid = new Grid
-            {
-                ColumnDefinitions =
-        {
-            new ColumnDefinition { Width = GridLength.Auto }, // Icon Button
-            new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) }, // Weight Entry
-            new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) }, // Reps Entry
-            new ColumnDefinition { Width = GridLength.Auto }  // Checkmark Button
-        },
-                Margin = new Thickness(0, 5, 0, 5)
-            };
-
-            // Create the action button for set options
-            var actionButton = new Button
-            {
-                ImageSource = "menu.png", // Replace with your icon file
-                BackgroundColor = Color.FromRgba(0, 0, 0, 0), // Fully transparent background
-                WidthRequest = 60,
-                HeightRequest = 60,
-                Padding = new Thickness(5), // Add padding to ensure the icon is centered
-                Margin = new Thickness(0, 0, 10, 0) // Add space to the right (10 units in this example)
-            };
-
-            actionButton.Clicked += async (s, e) =>
-            {
-                string action = await DisplayActionSheet("Options", "Cancel", null, "Remove Set", "Add Set Below");
-
-                if (action == "Remove Set")
-                {
-                    // Remove the current grid (set)
-                    exerciseLayout.Children.Remove(grid);
-                }
-                else if (action == "Add Set Below")
-                {
-                    // Add a new set below the current one
-                    AddSetBelow(grid, exerciseLayout);
-                }
-            };
-
-            // Entry for weight with frame
-            var weightEntryFrame = new Frame
-            {
-                Padding = new Thickness(1), // Set padding to create a border effect
-                BackgroundColor = Color.FromArgb("#2A2A2A"),
-                WidthRequest = 100, // Adjust the size as needed
-                HeightRequest = 35,
-                BorderColor = Color.FromRgb(140, 140, 140), // Set the border color
-                Content = new Entry
-                {
-                    Placeholder = "Pounds/Lb",
-                    Keyboard = Keyboard.Numeric,
-                    TextColor = Color.FromArgb("#FFFFFF"),  // White color
-                    BackgroundColor = Color.FromArgb("#2A2A2A"),  // Darker background for input
-                    WidthRequest = 100, // Adjust the size as needed
-                    HeightRequest = 35,
-                    Margin = new Thickness(5, 5, 0, 0)
-                }
-            };
-
-            // Entry for reps with frame
-            var repsEntryFrame = new Frame
-            {
-                Padding = new Thickness(1), // Set padding to create a border effect
-                BackgroundColor = Color.FromArgb("#2A2A2A"), // Set background color to gray
-                WidthRequest = 75, // Adjust the size as needed
-                HeightRequest = 35,
-                BorderColor = Color.FromRgb(140, 140, 140), // Set the border color
-                Content = new Entry
-                {
-                    Placeholder = "Reps",
-                    Keyboard = Keyboard.Numeric,
-                    TextColor = Color.FromArgb("#FFFFFF"),  // White color
-                    BackgroundColor = Color.FromArgb("#2A2A2A"),  // Darker background for input
-                    WidthRequest = 75, // Adjust the size as needed
-                    HeightRequest = 35,
-                    Margin = new Thickness(5, 5, 0, 0)
-                }
-            };
-
-            // Checkmark Button
-            var checkmarkButton = new Button
-            {
-                Text = "✔", // Placeholder text, you can replace with an icon if needed
-                TextColor = Color.FromRgba("#333333"),
-                BackgroundColor = Color.FromRgba(0, 0, 0, 0), // Fully transparent background
-                WidthRequest = 35, // Adjust the size as needed
-                HeightRequest = 35,
-                Padding = new Thickness(5), // Add padding to ensure the icon is centered
-                Margin = new Thickness(0, 0, 10, 0), // Add space to the right (10 units in this example)
-                IsEnabled = false // Initially disabled
-            };
-
-            checkmarkButton.Clicked += (s, e) =>
-            {
-                // Mark the set as completed (change color to green)
-                checkmarkButton.BackgroundColor = Color.FromArgb("#4CAF50");
-                checkmarkButton.TextColor = Color.FromArgb("#ffffff");
-                checkmarkButton.IsEnabled = false; // Disable the button after checking
-            };
-
-            // Enable the checkmark button only if both weight and reps entries are not null or empty
-            var weightEntry = (Entry)weightEntryFrame.Content;
-            var repsEntry = (Entry)repsEntryFrame.Content;
-            weightEntry.TextChanged += (s, e) => ValidateSetCompletion(weightEntry, repsEntry, checkmarkButton);
-            repsEntry.TextChanged += (s, e) => ValidateSetCompletion(weightEntry, repsEntry, checkmarkButton);
-
-            // Add the Button (icon), Weight, Reps Entry, and Checkmark Button to the grid
-            grid.Children.Add(actionButton);
-            Grid.SetColumn(actionButton, 0);
-
-            grid.Children.Add(weightEntryFrame);
-            Grid.SetColumn(weightEntryFrame, 1);
-
-            grid.Children.Add(repsEntryFrame);
-            Grid.SetColumn(repsEntryFrame, 2);
-
-            grid.Children.Add(checkmarkButton);
-            Grid.SetColumn(checkmarkButton, 3);
-
-            // Add the new grid to the exercise layout
-            exerciseLayout.Children.Add(grid);
-        }
-
-
-        private async void AddExerciseBelow(StackLayout exerciseLayout)
-        {
-            // Prompt the user to enter a new exercise name
-            string newExerciseName = await DisplayPromptAsync("New Exercise", "Enter the name for the new exercise:", "OK", "Cancel", "Exercise Name");
-
-            if (string.IsNullOrEmpty(newExerciseName))
-            {
-                return; // Exit if the user cancels or doesn't enter a name
-            }
-
-            // Create a new Exercise object
-            var newExercise = new Exercise
-            {
-                Name = newExerciseName,
-                MuscleGroup = "New Muscle Group", // You can set this dynamically if needed
-                Sets = new List<Set> { new Set { Reps = 0, Weight = 0 } } // Start with one default set
-            };
-
-            // Create a new frame for the exercise
-            var newExerciseFrame = CreateExerciseFrame(newExercise);
-
-            // Find the index of the current exercise frame
-            int currentFrameIndex = PlanContent.Children.IndexOf(exerciseLayout.Parent as Frame);
-
-            // Insert the new exercise frame right after the current one
-            PlanContent.Children.Insert(currentFrameIndex + 1, newExerciseFrame);
-        }
-
-        // Method to create a new exercise frame
-        private Frame CreateExerciseFrame(Exercise exercise)
+        // Builds one exercise card: muscle group tag, menu, name, column headers and set rows
+        private Frame CreateExerciseFrame(Exercise exercise, string templateName)
         {
             var exerciseFrame = new Frame
             {
-                BorderColor = Color.FromRgb(140, 140, 140),
-                BackgroundColor = Color.FromArgb("#333333"),
+                BorderColor = Theme.Border,
+                BackgroundColor = Theme.CardBackground,
                 CornerRadius = 10,
-                Padding = new Thickness(10),
+                Padding = new Thickness(10, 0, 10, 10),
                 Margin = new Thickness(0, 5, 0, 10),
                 HasShadow = true
             };
@@ -1176,77 +351,86 @@ namespace FitnessApp
                 Margin = new Thickness(0, 5, 0, 7)
             };
 
+            var card = new ExerciseCard
+            {
+                Frame = exerciseFrame,
+                TemplateName = templateName,
+                SetsLayout = new StackLayout { Spacing = 0 }
+            };
+
             var muscleGroupGrid = new Grid
             {
                 ColumnDefinitions =
-        {
-            new ColumnDefinition { Width = GridLength.Star },
-            new ColumnDefinition { Width = GridLength.Auto }
-        }
+                {
+                    new ColumnDefinition { Width = GridLength.Star },
+                    new ColumnDefinition { Width = GridLength.Auto }
+                }
             };
 
+            var muscleGroup = exercise.MuscleGroup ?? string.Empty;
             var muscleGroupFrame = new Frame
             {
-                BorderColor = Color.FromArgb("#FF0000"),
-                BackgroundColor = Color.FromArgb("#4A2A2A"),
+                BorderColor = Theme.TagBorder,
+                BackgroundColor = Theme.TagBackground,
                 CornerRadius = 5,
                 Padding = new Thickness(5),
                 HasShadow = false,
                 Margin = new Thickness(0, 5, 0, 7),
                 HorizontalOptions = LayoutOptions.Start,
-                VerticalOptions = LayoutOptions.Center
+                VerticalOptions = LayoutOptions.Center,
+                IsVisible = !string.IsNullOrWhiteSpace(muscleGroup),
+                Content = new Label
+                {
+                    Text = muscleGroup.ToUpper(),
+                    TextColor = Theme.TextPrimary,
+                    FontAttributes = FontAttributes.Bold,
+                    VerticalOptions = LayoutOptions.Center
+                }
             };
 
-            var muscleGroupLabel = new Label
-            {
-                Text = exercise.MuscleGroup.ToUpper(),
-                TextColor = Color.FromArgb("#FFFFFF"),
-                FontAttributes = FontAttributes.Bold,
-                VerticalOptions = LayoutOptions.Center
-            };
-
-            muscleGroupFrame.Content = muscleGroupLabel;
             muscleGroupGrid.Children.Add(muscleGroupFrame);
             Grid.SetColumn(muscleGroupFrame, 0);
 
             var menuButton = new Button
             {
                 ImageSource = "menu.png",
-                BackgroundColor = Color.FromRgba(0, 0, 0, 0),
-                WidthRequest = 60,
-                HeightRequest = 60,
+                BackgroundColor = Colors.Transparent,
+                WidthRequest = 48,
+                HeightRequest = 48,
                 VerticalOptions = LayoutOptions.Center,
                 HorizontalOptions = LayoutOptions.End
             };
 
             menuButton.Clicked += async (s, e) =>
             {
-                string action = await DisplayActionSheet("Options", "Cancel", null, "Delete Exercise", "Rename Exercise", "Add Set", "Add Exercise2 Below");
+                string action = await DisplayActionSheet("Options", "Cancel", null, "Add Set", "Rename Exercise", "Add Exercise Below", "Delete Exercise");
 
                 if (action == "Delete Exercise")
                 {
-                    PlanContent.Children.Remove(exerciseFrame);
+                    bool confirm = await DisplayAlert("Delete Exercise", $"Remove {card.NameLabel.Text} from this workout?", "Delete", "Keep");
+                    if (confirm)
+                    {
+                        PlanContent.Children.Remove(exerciseFrame);
+                        _cards.Remove(exerciseFrame);
+                    }
                 }
                 else if (action == "Rename Exercise")
                 {
-                    string newName = await DisplayPromptAsync("Rename Exercise", "Enter the new name for the exercise:", "OK", "Cancel", "Exercise Name");
+                    string newName = await DisplayPromptAsync("Rename Exercise", "Enter the new name for the exercise:", "OK", "Cancel", "Exercise Name", initialValue: card.NameLabel.Text);
 
-                    if (!string.IsNullOrEmpty(newName))
+                    if (!string.IsNullOrWhiteSpace(newName))
                     {
-                        var exerciseNameLabel = exerciseLayout.Children.OfType<Label>().FirstOrDefault();
-                        if (exerciseNameLabel != null)
-                        {
-                            exerciseNameLabel.Text = newName;
-                        }
+                        card.NameLabel.Text = newName.Trim();
                     }
                 }
                 else if (action == "Add Set")
                 {
-                    AddSetToExercise(exerciseLayout);
+                    AddSetRow(card, null, card.Sets.Count);
                 }
                 else if (action == "Add Exercise Below")
                 {
-                    AddExerciseBelow(exerciseLayout);
+                    _insertAfterFrame = exerciseFrame;
+                    await Navigation.PushAsync(new SelectExercisePage());
                 }
             };
 
@@ -1255,77 +439,501 @@ namespace FitnessApp
 
             exerciseLayout.Children.Add(muscleGroupGrid);
 
-            exerciseLayout.Children.Add(new Label
+            card.NameLabel = new Label
             {
                 Text = exercise.Name,
                 FontAttributes = FontAttributes.Bold,
                 FontSize = 18,
-                TextColor = Color.FromArgb("#ffffff")
-            });
-
-            var labelGrid = new Grid
-            {
-                ColumnDefinitions =
-        {
-            new ColumnDefinition { Width = GridLength.Auto },
-            new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) },
-            new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) },
-            new ColumnDefinition { Width = GridLength.Auto }
-        },
-                Margin = new Thickness(0, 5, 0, 0)
+                TextColor = Theme.TextPrimary
             };
+            exerciseLayout.Children.Add(card.NameLabel);
 
-            var weightLabel = new Label
+            var headerGrid = CreateSetGrid();
+            headerGrid.Margin = new Thickness(0, 5, 0, 0);
+            AddHeaderLabel(headerGrid, "Set", 1);
+            AddHeaderLabel(headerGrid, "Weight", 2);
+            AddHeaderLabel(headerGrid, "Reps", 3);
+            exerciseLayout.Children.Add(headerGrid);
+
+            exerciseLayout.Children.Add(card.SetsLayout);
+
+            var sets = exercise.Sets ?? new List<Set>();
+            if (sets.Count == 0)
             {
-                Text = "Weight",
-                FontAttributes = FontAttributes.Bold,
-                FontSize = 14,
-                TextColor = Color.FromArgb("#D3D3D3"),
-                HorizontalOptions = LayoutOptions.Center,
-                Margin = new Thickness(25, 0, 0, 0)
-            };
-            labelGrid.Children.Add(weightLabel);
-            Grid.SetColumn(weightLabel, 1);
+                sets = new List<Set> { new Set { SetNumber = 1 } };
+            }
 
-            var repsLabel = new Label
+            foreach (var set in sets)
             {
-                Text = "Reps",
-                FontAttributes = FontAttributes.Bold,
-                FontSize = 14,
-                TextColor = Color.FromArgb("#D3D3D3"),
-                HorizontalOptions = LayoutOptions.Start,
-                Margin = new Thickness(38, 0, 0, 0)
-            };
-            labelGrid.Children.Add(repsLabel);
-            Grid.SetColumn(repsLabel, 2);
-
-            exerciseLayout.Children.Add(labelGrid);
-
-            // Add the default set
-            AddSetToExercise(exerciseLayout);
+                AddSetRow(card, set, card.Sets.Count);
+            }
 
             exerciseFrame.Content = exerciseLayout;
+            _cards[exerciseFrame] = card;
             return exerciseFrame;
         }
 
+        // Every set row and the column header share these columns so they line up
+        private static Grid CreateSetGrid()
+        {
+            return new Grid
+            {
+                ColumnDefinitions =
+                {
+                    new ColumnDefinition { Width = new GridLength(40) },  // Set menu
+                    new ColumnDefinition { Width = new GridLength(32) },  // Set number
+                    new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) }, // Weight
+                    new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) }, // Reps
+                    new ColumnDefinition { Width = new GridLength(48) }   // Checkmark
+                },
+                ColumnSpacing = 8
+            };
+        }
 
+        private static void AddHeaderLabel(Grid grid, string text, int column)
+        {
+            var label = new Label
+            {
+                Text = text,
+                FontAttributes = FontAttributes.Bold,
+                FontSize = 14,
+                TextColor = Theme.TextSecondary,
+                HorizontalOptions = LayoutOptions.Center
+            };
+            grid.Children.Add(label);
+            Grid.SetColumn(label, column);
+        }
 
+        private static Frame WrapEntry(Entry entry)
+        {
+            return new Frame
+            {
+                Padding = new Thickness(6, 0),
+                BackgroundColor = Theme.InputBackground,
+                HeightRequest = 40,
+                CornerRadius = 6,
+                BorderColor = Theme.Border,
+                HasShadow = false,
+                Content = entry
+            };
+        }
 
+        // Adds a set row at the given position in the card. previous holds the last-session values, if any.
+        private void AddSetRow(ExerciseCard card, Set previous, int index)
+        {
+            var row = new SetRow { Grid = CreateSetGrid() };
+            row.Grid.Margin = new Thickness(0, 4);
 
+            var actionButton = new Button
+            {
+                ImageSource = "menu.png",
+                BackgroundColor = Colors.Transparent,
+                WidthRequest = 40,
+                HeightRequest = 40,
+                Padding = new Thickness(5),
+                VerticalOptions = LayoutOptions.Center
+            };
+
+            actionButton.Clicked += async (s, e) =>
+            {
+                string action = await DisplayActionSheet("Options", "Cancel", null, "Add Set Below", "Remove Set");
+
+                if (action == "Remove Set")
+                {
+                    card.SetsLayout.Children.Remove(row.Grid);
+                    card.Sets.Remove(row);
+                    RenumberSets(card);
+                }
+                else if (action == "Add Set Below")
+                {
+                    AddSetRow(card, null, card.Sets.IndexOf(row) + 1);
+                }
+            };
+
+            row.NumberLabel = new Label
+            {
+                FontAttributes = FontAttributes.Bold,
+                FontSize = 16,
+                TextColor = Theme.TextSecondary,
+                HorizontalOptions = LayoutOptions.Center,
+                VerticalOptions = LayoutOptions.Center
+            };
+
+            double previousWeight = previous?.PreviousWeight ?? 0;
+            int previousReps = previous?.PreviousReps ?? 0;
+
+            row.WeightEntry = new Entry
+            {
+                Placeholder = previousWeight > 0 ? $"{previousWeight} lbs" : "lbs",
+                PlaceholderColor = Theme.TextMuted,
+                Keyboard = Keyboard.Numeric,
+                TextColor = Theme.TextPrimary,
+                BackgroundColor = Theme.InputBackground,
+                HorizontalTextAlignment = TextAlignment.Center,
+                VerticalOptions = LayoutOptions.Center
+            };
+
+            row.RepsEntry = new Entry
+            {
+                Placeholder = previousReps > 0 ? $"{previousReps} reps" : "reps",
+                PlaceholderColor = Theme.TextMuted,
+                Keyboard = Keyboard.Numeric,
+                TextColor = Theme.TextPrimary,
+                BackgroundColor = Theme.InputBackground,
+                HorizontalTextAlignment = TextAlignment.Center,
+                VerticalOptions = LayoutOptions.Center
+            };
+
+            row.CheckButton = new Button
+            {
+                Text = "✔",
+                FontSize = 16,
+                WidthRequest = 40,
+                HeightRequest = 40,
+                CornerRadius = 20,
+                BorderWidth = 2,
+                Padding = new Thickness(0),
+                HorizontalOptions = LayoutOptions.Center,
+                VerticalOptions = LayoutOptions.Center
+            };
+
+            row.WeightEntry.TextChanged += (s, e) => UpdateCheckButton(row);
+            row.RepsEntry.TextChanged += (s, e) => UpdateCheckButton(row);
+
+            row.CheckButton.Clicked += async (s, e) =>
+            {
+                if (!HasBothValues(row))
+                {
+                    return;
+                }
+
+                await row.CheckButton.ScaleTo(0.9, 100, Easing.CubicIn);
+                await row.CheckButton.ScaleTo(1, 100, Easing.CubicOut);
+
+                // Tapping again un-marks the set
+                row.IsCompleted = !row.IsCompleted;
+                UpdateCheckButton(row);
+            };
+
+            UpdateCheckButton(row);
+
+            row.Grid.Children.Add(actionButton);
+            Grid.SetColumn(actionButton, 0);
+
+            row.Grid.Children.Add(row.NumberLabel);
+            Grid.SetColumn(row.NumberLabel, 1);
+
+            var weightFrame = WrapEntry(row.WeightEntry);
+            row.Grid.Children.Add(weightFrame);
+            Grid.SetColumn(weightFrame, 2);
+
+            var repsFrame = WrapEntry(row.RepsEntry);
+            row.Grid.Children.Add(repsFrame);
+            Grid.SetColumn(repsFrame, 3);
+
+            row.Grid.Children.Add(row.CheckButton);
+            Grid.SetColumn(row.CheckButton, 4);
+
+            index = Math.Clamp(index, 0, card.Sets.Count);
+            card.Sets.Insert(index, row);
+            card.SetsLayout.Children.Insert(index, row.Grid);
+            RenumberSets(card);
+        }
+
+        private static void RenumberSets(ExerciseCard card)
+        {
+            for (int i = 0; i < card.Sets.Count; i++)
+            {
+                card.Sets[i].NumberLabel.Text = (i + 1).ToString();
+            }
+        }
+
+        private static bool HasBothValues(SetRow row)
+        {
+            return !string.IsNullOrWhiteSpace(row.WeightEntry.Text) && !string.IsNullOrWhiteSpace(row.RepsEntry.Text);
+        }
+
+        // Idle: dim outline. Ready (both values typed): bright outline. Done: filled green.
+        private static void UpdateCheckButton(SetRow row)
+        {
+            bool ready = HasBothValues(row);
+            if (!ready)
+            {
+                row.IsCompleted = false;
+            }
+
+            if (row.IsCompleted)
+            {
+                row.CheckButton.BackgroundColor = Theme.Accent;
+                row.CheckButton.BorderColor = Theme.Accent;
+                row.CheckButton.TextColor = Theme.TextPrimary;
+            }
+            else if (ready)
+            {
+                row.CheckButton.BackgroundColor = Colors.Transparent;
+                row.CheckButton.BorderColor = Theme.CheckReady;
+                row.CheckButton.TextColor = Theme.TextPrimary;
+            }
+            else
+            {
+                row.CheckButton.BackgroundColor = Colors.Transparent;
+                row.CheckButton.BorderColor = Theme.CheckIdle;
+                row.CheckButton.TextColor = Theme.CheckIdle;
+            }
+        }
+
+        // Accepts "12.5" and "12,5"
+        private static bool TryParseWeight(string text, out double weight)
+        {
+            return double.TryParse(text.Trim().Replace(',', '.'), NumberStyles.Float, CultureInfo.InvariantCulture, out weight)
+                && weight >= 0 && !double.IsInfinity(weight);
+        }
+
+        private static bool TryParseReps(string text, out int reps)
+        {
+            return int.TryParse(text.Trim(), NumberStyles.None, CultureInfo.InvariantCulture, out reps);
+        }
+
+        // Reads the sets currently on screen. Never changes the workout session, so it is safe
+        // to call from Cancel and then Finish without logging anything twice.
+        private List<LoggedExercise> CollectWorkoutData(out bool hasEmptySets, out string invalidMessage)
+        {
+            hasEmptySets = false;
+            invalidMessage = null;
+            var logged = new List<LoggedExercise>();
+
+            foreach (var child in PlanContent.Children)
+            {
+                if (child is not Frame frame || !_cards.TryGetValue(frame, out var card))
+                {
+                    continue;
+                }
+
+                string exerciseName = card.NameLabel.Text;
+                var completedExercise = new CompletedExercise
+                {
+                    Name = exerciseName,
+                    Sets = new List<CompletedSet>()
+                };
+
+                for (int i = 0; i < card.Sets.Count; i++)
+                {
+                    var row = card.Sets[i];
+                    if (!HasBothValues(row))
+                    {
+                        hasEmptySets = true;
+                        continue;
+                    }
+
+                    if (!TryParseWeight(row.WeightEntry.Text, out double weight))
+                    {
+                        invalidMessage ??= $"Set {i + 1} of {exerciseName} has a weight that isn't a number.";
+                        continue;
+                    }
+
+                    if (!TryParseReps(row.RepsEntry.Text, out int reps))
+                    {
+                        invalidMessage ??= $"Set {i + 1} of {exerciseName} needs a whole number of reps.";
+                        continue;
+                    }
+
+                    completedExercise.Sets.Add(new CompletedSet
+                    {
+                        Weight = weight,
+                        Reps = reps,
+                        Completed = true
+                    });
+                }
+
+                if (completedExercise.Sets.Count > 0)
+                {
+                    logged.Add(new LoggedExercise { TemplateName = card.TemplateName, Completed = completedExercise });
+                }
+            }
+
+            return logged;
+        }
+
+        private async void OnFinishButtonClicked(object sender, EventArgs e)
+        {
+            var session = _currentWorkoutSession;
+            if (_isSaving || session == null)
+            {
+                return;
+            }
+
+            _isSaving = true;
+            _finishButton.IsEnabled = false;
+
+            try
+            {
+                var logged = CollectWorkoutData(out bool hasEmptySets, out string invalidMessage);
+
+                if (invalidMessage != null)
+                {
+                    await DisplayAlert("Check your sets", invalidMessage, "OK");
+                    return;
+                }
+
+                if (logged.Count == 0)
+                {
+                    await DisplayAlert("Warning", "Please input at least one set!", "Ok");
+                    return;
+                }
+
+                if (hasEmptySets)
+                {
+                    bool proceed = await DisplayAlert("Warning", "Some exercises have empty sets and will not be saved. Do you want to continue?", "Yes", "No");
+                    if (!proceed)
+                    {
+                        return;
+                    }
+                }
+
+#if ANDROID
+                var path = FileSystem.AppDataDirectory;
+
+                var historySession = new WorkoutSession
+                {
+                    Id = session.Id,
+                    Title = session.Title,
+                    Date = DateTime.Today.ToString("yyyy-MM-dd"),
+                    LastPerformed = session.LastPerformed,
+                    Exercises = session.Exercises,
+                    CompletedExercises = logged.Select(l => l.Completed).ToList()
+                };
+
+                string historyFileName = $"History_{DateTime.Now:yyyy-MM-dd_HH-mm-ss}_Workout.json";
+                string json = JsonConvert.SerializeObject(historySession, Formatting.Indented);
+                File.WriteAllText(Path.Combine(path, historyFileName), json);
+
+                // The workout is saved. Updating the template's "previous" values must never undo that.
+                try
+                {
+                    UpdateOriginalWorkoutFile(session.Id, logged, path);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Could not update template {session.Id}: {ex}");
+                }
+
+                LoadWorkoutCount(); // Settings can reset the counter while this page is alive
+                workoutCount++;
+                SaveWorkoutCount();
+
+                EndWorkout();
+
+                await DisplayAlert("Workout Finished", $"You have completed {workoutCount} workouts. View previous workouts under the history tab.", "OK");
+#else
+                await DisplayAlert("Not Supported", "Workout saving is only supported on Android for now.", "OK");
+#endif
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Exception occurred: {ex}");
+                await DisplayAlert("Error", "An unexpected error occurred.", "OK");
+            }
+            finally
+            {
+                _isSaving = false;
+                if (_finishButton != null)
+                {
+                    _finishButton.IsEnabled = true;
+                }
+            }
+        }
+
+        private static void UpdateOriginalWorkoutFile(string workoutId, List<LoggedExercise> logged, string directory)
+        {
+            if (string.IsNullOrEmpty(workoutId))
+            {
+                return;
+            }
+
+            string originalWorkoutFilePath = Path.Combine(directory, $"{workoutId}.json");
+
+            if (!File.Exists(originalWorkoutFilePath))
+            {
+                Console.WriteLine($"Error: Original workout file with Id {workoutId} not found.");
+                return;
+            }
+
+            var originalWorkout = JsonConvert.DeserializeObject<WorkoutSession>(File.ReadAllText(originalWorkoutFilePath));
+            if (originalWorkout?.Exercises == null)
+            {
+                return;
+            }
+
+            foreach (var entry in logged)
+            {
+                // Match on the name the exercise had in the template, so renames keep their history
+                string templateName = entry.TemplateName ?? entry.Completed.Name;
+                var originalExercise = originalWorkout.Exercises.FirstOrDefault(e => e.Name == templateName);
+                if (originalExercise?.Sets == null)
+                {
+                    continue;
+                }
+
+                // Sets added during the workout have no template slot, so only the template's sets are updated
+                int count = Math.Min(entry.Completed.Sets.Count, originalExercise.Sets.Count);
+                for (int i = 0; i < count; i++)
+                {
+                    originalExercise.Sets[i].PreviousWeight = entry.Completed.Sets[i].Weight;
+                    originalExercise.Sets[i].PreviousReps = entry.Completed.Sets[i].Reps;
+                }
+            }
+
+            originalWorkout.LastPerformed = DateTime.Now.ToString("yyyy-MM-dd");
+
+            File.WriteAllText(originalWorkoutFilePath, JsonConvert.SerializeObject(originalWorkout, Formatting.Indented));
+        }
+
+        private async void OnCancelButtonClicked(object sender, EventArgs e)
+        {
+            try
+            {
+                var logged = CollectWorkoutData(out _, out string invalidMessage);
+                if (logged.Count > 0 || invalidMessage != null)
+                {
+                    bool proceed = await DisplayAlert("Warning", "Some sets have data that will be lost. Do you want to continue?", "Yes", "No");
+                    if (!proceed)
+                    {
+                        return;
+                    }
+                }
+
+                EndWorkout();
+
+                await DisplayAlert("Workout Canceled", "Your workout has been canceled.", "OK");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Exception occurred: {ex}");
+                await DisplayAlert("Error", "An unexpected error occurred.", "OK");
+            }
+        }
+
+        private void EndWorkout()
+        {
+            StopTimer();
+            _cards.Clear();
+            _currentWorkoutSession = null;
+            _selectedWorkout = null;
+            _insertAfterFrame = null;
+            _finishButton = null;
+            _timerLabel = null;
+            App.IsWorkoutActive = false;
+            DisplayNoWorkoutMessage();
+        }
 
         private void LoadWorkoutCount()
         {
             workoutCount = Preferences.Get("WorkoutCount", 0); // Default to 0 if not found
         }
 
-
         private void SaveWorkoutCount()
         {
             Preferences.Set("WorkoutCount", workoutCount);
         }
-
-
-
-
     }
 }
