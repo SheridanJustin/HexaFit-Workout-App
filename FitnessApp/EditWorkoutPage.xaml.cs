@@ -46,12 +46,7 @@ namespace FitnessApp
                 return;
             }
 
-            var exercises = _editor.BuildExercises(out string invalidMessage);
-            if (invalidMessage != null)
-            {
-                await DisplayAlert("Check your sets", invalidMessage, "OK");
-                return;
-            }
+            var exercises = _editor.BuildExercises();
 
             if (exercises.Count == 0)
             {

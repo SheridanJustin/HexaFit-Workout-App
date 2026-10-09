@@ -22,6 +22,7 @@ namespace FitnessApp
             public Frame Frame;
             public Label NameLabel;
             public StackLayout SetsLayout;
+            public View Body; // Column headers and sets, hidden while dragging so every card fits on screen
             public string TemplateName;
             public string MuscleGroup;
             public string ImagePath;
@@ -43,6 +44,7 @@ namespace FitnessApp
         private Label _timerLabel;
         private WorkoutSession _currentWorkoutSession;
         private readonly Dictionary<Frame, ExerciseCard> _cards = new Dictionary<Frame, ExerciseCard>();
+        private readonly CardReorder _reorder;
         private Frame _insertAfterFrame; // Where "Add Exercise Below" should put the picked exercise
         private Button _finishButton;
         private bool _isSaving;
@@ -118,6 +120,15 @@ namespace FitnessApp
         public MainPage()
         {
             InitializeComponent();
+
+            // Dragging reorders PlanContent directly; Finish saves that order to the template
+            _reorder = new CardReorder(PlanContent, compact =>
+            {
+                foreach (var card in _cards.Values)
+                {
+                    card.Body.IsVisible = !compact;
+                }
+            });
 
             LoadWorkoutCount();
             DisplayNoWorkoutMessage();
@@ -361,10 +372,15 @@ namespace FitnessApp
             {
                 ColumnDefinitions =
                 {
+                    new ColumnDefinition { Width = GridLength.Auto },
                     new ColumnDefinition { Width = GridLength.Star },
                     new ColumnDefinition { Width = GridLength.Auto }
                 }
             };
+
+            var handle = CardReorder.CreateHandle();
+            muscleGroupGrid.Children.Add(handle);
+            Grid.SetColumn(handle, 0);
 
             var muscleGroup = exercise.MuscleGroup ?? string.Empty;
             var muscleGroupFrame = new Frame
@@ -388,7 +404,7 @@ namespace FitnessApp
             };
 
             muscleGroupGrid.Children.Add(muscleGroupFrame);
-            Grid.SetColumn(muscleGroupFrame, 0);
+            Grid.SetColumn(muscleGroupFrame, 1);
 
             var menuButton = new Button
             {
@@ -434,7 +450,7 @@ namespace FitnessApp
             };
 
             muscleGroupGrid.Children.Add(menuButton);
-            Grid.SetColumn(menuButton, 1);
+            Grid.SetColumn(menuButton, 2);
 
             exerciseLayout.Children.Add(muscleGroupGrid);
 
@@ -452,9 +468,11 @@ namespace FitnessApp
             AddHeaderLabel(headerGrid, "Set", 1);
             AddHeaderLabel(headerGrid, "Weight", 2);
             AddHeaderLabel(headerGrid, "Reps", 3);
-            exerciseLayout.Children.Add(headerGrid);
-
-            exerciseLayout.Children.Add(card.SetsLayout);
+            var body = new StackLayout { Spacing = 5 };
+            body.Children.Add(headerGrid);
+            body.Children.Add(card.SetsLayout);
+            card.Body = body;
+            exerciseLayout.Children.Add(body);
 
             var sets = exercise.Sets ?? new List<Set>();
             if (sets.Count == 0)
@@ -469,6 +487,7 @@ namespace FitnessApp
 
             exerciseFrame.Content = exerciseLayout;
             _cards[exerciseFrame] = card;
+            _reorder.Attach(exerciseFrame, handle);
             return exerciseFrame;
         }
 

@@ -1,10 +1,10 @@
-using System.Globalization;
 using FitnessApp.Models;
 
 namespace FitnessApp
 {
     // Shared exercise/set editor for the Create and Edit template screens.
     // Each card keeps its own set rows, so adding an exercise never rebuilds (and wipes) the others.
+    // Weights and reps aren't edited here; each set keeps the "previous" values its last workout saved.
     public class TemplateEditor
     {
         private class ExerciseCard
@@ -13,6 +13,7 @@ namespace FitnessApp
             public Label NameLabel;
             public string MuscleGroup;
             public string ImagePath;
+            public View Body; // Hidden while dragging so every card fits on screen
             public StackLayout SetsLayout;
             public List<SetRow> Rows = new List<SetRow>();
         }
@@ -21,23 +22,24 @@ namespace FitnessApp
         {
             public Grid Grid;
             public Label NumberLabel;
-            public Entry WeightEntry;
-            public Entry RepsEntry;
+            public Set TemplateSet; // The saved set this row came from; null for new sets
         }
 
         private readonly ContentPage _page;
         private readonly StackLayout _layout;
         private readonly List<ExerciseCard> _cards = new List<ExerciseCard>();
+        private readonly CardReorder _reorder;
 
         public TemplateEditor(ContentPage page, StackLayout layout)
         {
             _page = page;
             _layout = layout;
+            _reorder = new CardReorder(layout, SetCompact, SyncOrderFromLayout);
         }
 
         public int ExerciseCount => _cards.Count;
 
-        // Adds a card for the exercise. Exercises picked from the list get two empty sets.
+        // Adds a card for the exercise. Exercises picked from the list get two sets.
         public void AddExercise(Exercise exercise, bool withDefaultSets)
         {
             var card = new ExerciseCard
@@ -66,10 +68,15 @@ namespace FitnessApp
             {
                 ColumnDefinitions =
                 {
+                    new ColumnDefinition { Width = GridLength.Auto },
                     new ColumnDefinition { Width = GridLength.Star },
                     new ColumnDefinition { Width = GridLength.Auto }
                 }
             };
+
+            var handle = CardReorder.CreateHandle();
+            headerGrid.Children.Add(handle);
+            Grid.SetColumn(handle, 0);
 
             var muscleGroupFrame = new Frame
             {
@@ -90,7 +97,7 @@ namespace FitnessApp
                 }
             };
             headerGrid.Children.Add(muscleGroupFrame);
-            Grid.SetColumn(muscleGroupFrame, 0);
+            Grid.SetColumn(muscleGroupFrame, 1);
 
             var menuButton = new Button
             {
@@ -102,7 +109,7 @@ namespace FitnessApp
             };
             menuButton.Clicked += async (s, e) => await ShowExerciseMenu(card);
             headerGrid.Children.Add(menuButton);
-            Grid.SetColumn(menuButton, 1);
+            Grid.SetColumn(menuButton, 2);
 
             exerciseLayout.Children.Add(headerGrid);
 
@@ -115,12 +122,7 @@ namespace FitnessApp
             };
             exerciseLayout.Children.Add(card.NameLabel);
 
-            var columnHeaders = CreateSetGrid();
-            columnHeaders.Margin = new Thickness(0, 5, 0, 0);
-            AddHeaderLabel(columnHeaders, "Set", 1);
-            AddHeaderLabel(columnHeaders, "Weight", 2);
-            AddHeaderLabel(columnHeaders, "Reps", 3);
-            exerciseLayout.Children.Add(columnHeaders);
+            card.Body = card.SetsLayout;
             exerciseLayout.Children.Add(card.SetsLayout);
 
             card.Frame.Content = exerciseLayout;
@@ -140,6 +142,26 @@ namespace FitnessApp
 
             _cards.Add(card);
             _layout.Children.Add(card.Frame);
+            _reorder.Attach(card.Frame, handle);
+        }
+
+        private void SetCompact(bool compact)
+        {
+            foreach (var card in _cards)
+            {
+                card.Body.IsVisible = !compact;
+            }
+        }
+
+        // Keeps _cards in the same order as the cards on screen after a drag
+        private void SyncOrderFromLayout()
+        {
+            var ordered = _layout.Children
+                .Select(child => _cards.FirstOrDefault(c => c.Frame == child))
+                .Where(c => c != null)
+                .ToList();
+            _cards.Clear();
+            _cards.AddRange(ordered);
         }
 
         private async Task ShowExerciseMenu(ExerciseCard card)
@@ -195,69 +217,23 @@ namespace FitnessApp
             _layout.Children.Insert(newIndex, card.Frame);
         }
 
-        private static Grid CreateSetGrid()
-        {
-            return new Grid
-            {
-                ColumnDefinitions =
-                {
-                    new ColumnDefinition { Width = new GridLength(40) },  // Set menu
-                    new ColumnDefinition { Width = new GridLength(32) },  // Set number
-                    new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) }, // Weight
-                    new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) }  // Reps
-                },
-                ColumnSpacing = 8
-            };
-        }
-
-        private static void AddHeaderLabel(Grid grid, string text, int column)
-        {
-            var label = new Label
-            {
-                Text = text,
-                FontAttributes = FontAttributes.Bold,
-                FontSize = 14,
-                TextColor = Theme.TextSecondary,
-                HorizontalOptions = LayoutOptions.Center
-            };
-            grid.Children.Add(label);
-            Grid.SetColumn(label, column);
-        }
-
-        private static Entry CreateEntry(string placeholder, string text)
-        {
-            return new Entry
-            {
-                Placeholder = placeholder,
-                PlaceholderColor = Theme.TextMuted,
-                Text = text,
-                Keyboard = Keyboard.Numeric,
-                TextColor = Theme.TextPrimary,
-                BackgroundColor = Theme.InputBackground,
-                HorizontalTextAlignment = TextAlignment.Center,
-                VerticalOptions = LayoutOptions.Center
-            };
-        }
-
-        private static Frame WrapEntry(Entry entry)
-        {
-            return new Frame
-            {
-                Padding = new Thickness(6, 0),
-                BackgroundColor = Theme.InputBackground,
-                HeightRequest = 40,
-                CornerRadius = 6,
-                BorderColor = Theme.Border,
-                HasShadow = false,
-                Content = entry
-            };
-        }
-
-        // The weight/reps boxes hold the set's "previous" values, which the workout screen shows as hints
         private void AddSetRow(ExerciseCard card, Set set, int index)
         {
-            var row = new SetRow { Grid = CreateSetGrid() };
-            row.Grid.Margin = new Thickness(0, 4);
+            var row = new SetRow
+            {
+                TemplateSet = set,
+                Grid = new Grid
+                {
+                    ColumnDefinitions =
+                    {
+                        new ColumnDefinition { Width = new GridLength(40) },  // Set menu
+                        new ColumnDefinition { Width = GridLength.Auto },     // "Set N"
+                        new ColumnDefinition { Width = GridLength.Star }      // Last logged
+                    },
+                    ColumnSpacing = 8,
+                    Margin = new Thickness(0, 2)
+                }
+            };
 
             var actionButton = new Button
             {
@@ -290,27 +266,27 @@ namespace FitnessApp
                 FontAttributes = FontAttributes.Bold,
                 FontSize = 16,
                 TextColor = Theme.TextSecondary,
-                HorizontalOptions = LayoutOptions.Center,
                 VerticalOptions = LayoutOptions.Center
             };
 
+            // Read-only reminder of what was logged last time
             double weight = set?.PreviousWeight ?? 0;
             int reps = set?.PreviousReps ?? 0;
-            row.WeightEntry = CreateEntry("lbs", weight > 0 ? weight.ToString(CultureInfo.InvariantCulture) : null);
-            row.RepsEntry = CreateEntry("reps", reps > 0 ? reps.ToString(CultureInfo.InvariantCulture) : null);
+            var lastLabel = new Label
+            {
+                Text = weight > 0 || reps > 0 ? $"Last: {weight} lbs × {reps} reps" : string.Empty,
+                FontSize = 14,
+                TextColor = Theme.TextMuted,
+                HorizontalOptions = LayoutOptions.End,
+                VerticalOptions = LayoutOptions.Center
+            };
 
             row.Grid.Children.Add(actionButton);
             Grid.SetColumn(actionButton, 0);
             row.Grid.Children.Add(row.NumberLabel);
             Grid.SetColumn(row.NumberLabel, 1);
-
-            var weightFrame = WrapEntry(row.WeightEntry);
-            row.Grid.Children.Add(weightFrame);
-            Grid.SetColumn(weightFrame, 2);
-
-            var repsFrame = WrapEntry(row.RepsEntry);
-            row.Grid.Children.Add(repsFrame);
-            Grid.SetColumn(repsFrame, 3);
+            row.Grid.Children.Add(lastLabel);
+            Grid.SetColumn(lastLabel, 2);
 
             index = Math.Clamp(index, 0, card.Rows.Count);
             card.Rows.Insert(index, row);
@@ -322,14 +298,14 @@ namespace FitnessApp
         {
             for (int i = 0; i < card.Rows.Count; i++)
             {
-                card.Rows[i].NumberLabel.Text = (i + 1).ToString();
+                card.Rows[i].NumberLabel.Text = $"Set {i + 1}";
             }
         }
 
-        // Reads the cards back into exercises, in on-screen order. Empty boxes save as 0.
-        public List<Exercise> BuildExercises(out string invalidMessage)
+        // Reads the cards back into exercises, in on-screen order. Sets keep their saved
+        // "previous" values; new sets start empty.
+        public List<Exercise> BuildExercises()
         {
-            invalidMessage = null;
             var exercises = new List<Exercise>();
 
             foreach (var card in _cards)
@@ -344,29 +320,14 @@ namespace FitnessApp
 
                 for (int i = 0; i < card.Rows.Count; i++)
                 {
-                    var row = card.Rows[i];
-                    double weight = 0;
-                    int reps = 0;
-
-                    string weightText = row.WeightEntry.Text?.Trim();
-                    if (!string.IsNullOrEmpty(weightText)
-                        && (!double.TryParse(weightText.Replace(',', '.'), NumberStyles.Float, CultureInfo.InvariantCulture, out weight) || weight < 0))
-                    {
-                        invalidMessage ??= $"Set {i + 1} of {exercise.Name} has a weight that isn't a number.";
-                    }
-
-                    string repsText = row.RepsEntry.Text?.Trim();
-                    if (!string.IsNullOrEmpty(repsText)
-                        && !int.TryParse(repsText, NumberStyles.None, CultureInfo.InvariantCulture, out reps))
-                    {
-                        invalidMessage ??= $"Set {i + 1} of {exercise.Name} needs a whole number of reps.";
-                    }
-
+                    var saved = card.Rows[i].TemplateSet;
                     exercise.Sets.Add(new Set
                     {
                         SetNumber = i + 1,
-                        PreviousWeight = weight,
-                        PreviousReps = reps
+                        Weight = saved?.Weight ?? 0,
+                        Reps = saved?.Reps ?? 0,
+                        PreviousWeight = saved?.PreviousWeight ?? 0,
+                        PreviousReps = saved?.PreviousReps ?? 0
                     });
                 }
 
