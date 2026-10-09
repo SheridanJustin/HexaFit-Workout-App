@@ -15,14 +15,16 @@ namespace FitnessApp
     public partial class MainPage : ContentPage
     {
         // One exercise card on screen. TemplateName is the name the exercise had in the
-        // template when the workout started, so renaming it mid-workout still updates the
-        // right "previous" values. It is null for exercises added during the workout.
+        // template when the workout started, so Finish can match it back to the template exercise
+        // even after a rename. It is null for exercises added during the workout.
         private class ExerciseCard
         {
             public Frame Frame;
             public Label NameLabel;
             public StackLayout SetsLayout;
             public string TemplateName;
+            public string MuscleGroup;
+            public string ImagePath;
             public List<SetRow> Sets = new List<SetRow>();
         }
 
@@ -34,12 +36,7 @@ namespace FitnessApp
             public Entry RepsEntry;
             public Button CheckButton;
             public bool IsCompleted;
-        }
-
-        private class LoggedExercise
-        {
-            public string TemplateName;
-            public CompletedExercise Completed;
+            public Set TemplateSet; // The template set this row came from; null for sets added mid-workout
         }
 
         private int workoutCount = 0; // Store the workout count
@@ -355,6 +352,8 @@ namespace FitnessApp
             {
                 Frame = exerciseFrame,
                 TemplateName = templateName,
+                MuscleGroup = exercise.MuscleGroup ?? string.Empty,
+                ImagePath = exercise.ImagePath ?? string.Empty,
                 SetsLayout = new StackLayout { Spacing = 0 }
             };
 
@@ -521,7 +520,7 @@ namespace FitnessApp
         // Adds a set row at the given position in the card. previous holds the last-session values, if any.
         private void AddSetRow(ExerciseCard card, Set previous, int index)
         {
-            var row = new SetRow { Grid = CreateSetGrid() };
+            var row = new SetRow { Grid = CreateSetGrid(), TemplateSet = previous };
             row.Grid.Margin = new Thickness(0, 4);
 
             var actionButton = new Button
@@ -590,7 +589,7 @@ namespace FitnessApp
                 FontSize = 16,
                 WidthRequest = 40,
                 HeightRequest = 40,
-                CornerRadius = 20,
+                CornerRadius = 6,
                 BorderWidth = 2,
                 Padding = new Thickness(0),
                 HorizontalOptions = LayoutOptions.Center,
@@ -696,11 +695,11 @@ namespace FitnessApp
 
         // Reads the sets currently on screen. Never changes the workout session, so it is safe
         // to call from Cancel and then Finish without logging anything twice.
-        private List<LoggedExercise> CollectWorkoutData(out bool hasEmptySets, out string invalidMessage)
+        private List<CompletedExercise> CollectWorkoutData(out bool hasEmptySets, out string invalidMessage)
         {
             hasEmptySets = false;
             invalidMessage = null;
-            var logged = new List<LoggedExercise>();
+            var logged = new List<CompletedExercise>();
 
             foreach (var child in PlanContent.Children)
             {
@@ -747,7 +746,7 @@ namespace FitnessApp
 
                 if (completedExercise.Sets.Count > 0)
                 {
-                    logged.Add(new LoggedExercise { TemplateName = card.TemplateName, Completed = completedExercise });
+                    logged.Add(completedExercise);
                 }
             }
 
@@ -800,17 +799,17 @@ namespace FitnessApp
                     Date = DateTime.Today.ToString("yyyy-MM-dd"),
                     LastPerformed = session.LastPerformed,
                     Exercises = session.Exercises,
-                    CompletedExercises = logged.Select(l => l.Completed).ToList()
+                    CompletedExercises = logged
                 };
 
                 string historyFileName = $"History_{DateTime.Now:yyyy-MM-dd_HH-mm-ss}_Workout.json";
                 string json = JsonConvert.SerializeObject(historySession, Formatting.Indented);
                 File.WriteAllText(Path.Combine(path, historyFileName), json);
 
-                // The workout is saved. Updating the template's "previous" values must never undo that.
+                // The workout is saved. Updating the template must never undo that.
                 try
                 {
-                    UpdateOriginalWorkoutFile(session.Id, logged, path);
+                    SaveChangesToTemplate(session.Id, path);
                 }
                 catch (Exception ex)
                 {
@@ -843,49 +842,93 @@ namespace FitnessApp
             }
         }
 
-        private static void UpdateOriginalWorkoutFile(string workoutId, List<LoggedExercise> logged, string directory)
+        // Writes the workout as it ended back into its template: exercise order, names, added or
+        // removed exercises and sets, plus this session's weights and reps as the new "previous" values.
+        private void SaveChangesToTemplate(string workoutId, string directory)
         {
             if (string.IsNullOrEmpty(workoutId))
             {
                 return;
             }
 
-            string originalWorkoutFilePath = Path.Combine(directory, $"{workoutId}.json");
+            string templatePath = Path.Combine(directory, $"{workoutId}.json");
 
-            if (!File.Exists(originalWorkoutFilePath))
+            if (!File.Exists(templatePath))
             {
                 Console.WriteLine($"Error: Original workout file with Id {workoutId} not found.");
                 return;
             }
 
-            var originalWorkout = JsonConvert.DeserializeObject<WorkoutSession>(File.ReadAllText(originalWorkoutFilePath));
-            if (originalWorkout?.Exercises == null)
+            var template = JsonConvert.DeserializeObject<WorkoutSession>(File.ReadAllText(templatePath));
+            if (template == null)
             {
                 return;
             }
 
-            foreach (var entry in logged)
+            var remaining = new List<Exercise>(template.Exercises ?? new List<Exercise>());
+            var updatedExercises = new List<Exercise>();
+
+            foreach (var child in PlanContent.Children)
             {
-                // Match on the name the exercise had in the template, so renames keep their history
-                string templateName = entry.TemplateName ?? entry.Completed.Name;
-                var originalExercise = originalWorkout.Exercises.FirstOrDefault(e => e.Name == templateName);
-                if (originalExercise?.Sets == null)
+                if (child is not Frame frame || !_cards.TryGetValue(frame, out var card))
                 {
                     continue;
                 }
 
-                // Sets added during the workout have no template slot, so only the template's sets are updated
-                int count = Math.Min(entry.Completed.Sets.Count, originalExercise.Sets.Count);
-                for (int i = 0; i < count; i++)
+                // Find the template exercise this card started from (none for exercises added mid-workout)
+                Exercise original = null;
+                if (card.TemplateName != null)
                 {
-                    originalExercise.Sets[i].PreviousWeight = entry.Completed.Sets[i].Weight;
-                    originalExercise.Sets[i].PreviousReps = entry.Completed.Sets[i].Reps;
+                    original = remaining.FirstOrDefault(e => e.Name == card.TemplateName);
+                    remaining.Remove(original);
                 }
+
+                var exercise = new Exercise
+                {
+                    Name = card.NameLabel.Text,
+                    MuscleGroup = card.MuscleGroup,
+                    ImagePath = string.IsNullOrEmpty(card.ImagePath) ? original?.ImagePath ?? string.Empty : card.ImagePath,
+                    Sets = new List<Set>()
+                };
+
+                for (int i = 0; i < card.Sets.Count; i++)
+                {
+                    var row = card.Sets[i];
+                    var originalSet = row.TemplateSet;
+
+                    var set = new Set
+                    {
+                        SetNumber = i + 1,
+                        Weight = originalSet?.Weight ?? 0,
+                        Reps = originalSet?.Reps ?? 0,
+                        PreviousWeight = originalSet?.PreviousWeight ?? 0,
+                        PreviousReps = originalSet?.PreviousReps ?? 0
+                    };
+
+                    // Sets you filled in become the new hints; blank sets keep the old ones
+                    if (HasBothValues(row)
+                        && TryParseWeight(row.WeightEntry.Text, out double weight)
+                        && TryParseReps(row.RepsEntry.Text, out int reps))
+                    {
+                        set.PreviousWeight = weight;
+                        set.PreviousReps = reps;
+                    }
+
+                    exercise.Sets.Add(set);
+                }
+
+                updatedExercises.Add(exercise);
             }
 
-            originalWorkout.LastPerformed = DateTime.Now.ToString("yyyy-MM-dd");
+            // A template with no exercises disappears from the Templates page, so never save one
+            if (updatedExercises.Count > 0)
+            {
+                template.Exercises = updatedExercises;
+            }
 
-            File.WriteAllText(originalWorkoutFilePath, JsonConvert.SerializeObject(originalWorkout, Formatting.Indented));
+            template.LastPerformed = DateTime.Now.ToString("yyyy-MM-dd");
+
+            File.WriteAllText(templatePath, JsonConvert.SerializeObject(template, Formatting.Indented));
         }
 
         private async void OnCancelButtonClicked(object sender, EventArgs e)
